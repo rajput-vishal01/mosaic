@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isAgencyAdmin, isSuperadmin } from "./roles";
+import { canManageAgency, isAgencyAdmin, isSuperadmin } from "./roles";
 
 describe("role boundaries", () => {
   it("recognizes only the platform superadmin role", () => {
@@ -17,5 +17,11 @@ describe("role boundaries", () => {
 
   it("supports Better Auth's comma-separated platform roles", () => {
     expect(isSuperadmin("user,superadmin")).toBe(true);
+  });
+
+  it("allows platform or agency administrators to manage an agency", () => {
+    expect(canManageAgency("superadmin", undefined)).toBe(true);
+    expect(canManageAgency("user", "admin")).toBe(true);
+    expect(canManageAgency("user", "member")).toBe(false);
   });
 });

@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "auth:create-superadmin": "auth create-admin --config lib/auth/config.ts --role superadmin"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.2",

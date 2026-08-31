@@ -9,6 +9,7 @@ This directory is the source of truth for the first Mosaic release. Mosaic is a 
 3. [Interface contract](./UI-SPEC.md)
 4. [Requirements](./REQUIREMENTS.md)
 5. [Delivery roadmap](./ROADMAP.md)
+6. [Local development](./DEVELOPMENT.md)
 
 ## Decisions already made
 

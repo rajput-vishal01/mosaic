@@ -19,3 +19,10 @@ export function isSuperadmin(role: string | null | undefined): boolean {
 export function isAgencyAdmin(role: string | null | undefined): boolean {
   return role?.split(",").includes(agencyRoles.admin) ?? false;
 }
+
+export function canManageAgency(
+  platformRole: string | null | undefined,
+  agencyRole: string | null | undefined,
+): boolean {
+  return isSuperadmin(platformRole) || isAgencyAdmin(agencyRole);
+}
