@@ -122,4 +122,3 @@ Mosaic and provider sessions are separate:
 ## Definition of success
 
 The first release is successful when two client users in the same agency can sign in to the same Mosaic dashboard URL, receive different account-scoped results, receive scheduled reports containing only their allowed data, and continue seeing refreshed data without authorizing any provider themselves.
-

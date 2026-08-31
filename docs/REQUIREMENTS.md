@@ -1,6 +1,6 @@
 # Mosaic v1 requirements
 
-**Defined:** 2026-08-31  
+**Defined:** 2026-08-31
 **Core value:** A client signs into Mosaic and sees current, correctly isolated analytics for assigned marketing accounts without authorizing a provider.
 
 ## v1 requirements
@@ -137,4 +137,3 @@
 ---
 
 *Last updated: 2026-08-31 after initial architecture planning.*
-

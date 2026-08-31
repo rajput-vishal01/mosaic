@@ -115,4 +115,3 @@ Generic full-page spinners are not accepted.
 - Text and control contrast meets WCAG AA.
 - Reduced-motion mode remains complete.
 - The route does not introduce a second design system or duplicate a library capability.
-
