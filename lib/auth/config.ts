@@ -6,6 +6,7 @@ import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { db } from "@/lib/db/client";
 import * as schema from "@/lib/db/schema";
 import { platformRoles } from "./roles";
+import { sendPasswordResetEmail } from "@/lib/email/send";
 
 export function createMosaicAuth({ allowSignup = false, autoSignIn = true } = {}) {
   return betterAuth({
@@ -18,6 +19,10 @@ export function createMosaicAuth({ allowSignup = false, autoSignIn = true } = {}
     disableSignUp: !allowSignup,
     autoSignIn,
     requireEmailVerification: false,
+    resetPasswordTokenExpiresIn: 60 * 60,
+    sendResetPassword: async ({ user, url }) => {
+      await sendPasswordResetEmail({ email: user.email, name: user.name, resetUrl: url });
+    },
   },
   session: {
     expiresIn: 60 * 60 * 24 * 14,

@@ -18,5 +18,12 @@ services:
       retries: 10
     restart: unless-stopped
 
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1026:1025"
+      - "8026:8025"
+    restart: unless-stopped
+
 volumes:
   mosaic-postgres:

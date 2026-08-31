@@ -3,7 +3,7 @@
 ## First run
 
 1. Copy `.env.example` to `.env.local` and replace `BETTER_AUTH_SECRET` with a random secret.
-2. Start PostgreSQL with `docker compose -f compose.dev.yml up -d`.
+2. Start PostgreSQL and Mailpit with `docker compose -f compose.dev.yml up -d`.
 3. Apply migrations with `npm run db:migrate`.
 4. Create the first operator:
 
@@ -14,6 +14,8 @@
 5. Run `npm run dev` and sign in at `http://localhost:3000/login`.
 
 Public registration is intentionally disabled. The bootstrap command comes from Better Auth, so Mosaic does not implement password or session internals.
+
+Development authentication emails are captured by Mailpit at `http://localhost:8026`; they are never delivered externally. Production must provide the `SMTP_*` variables shown in `.env.example`.
 
 ## Verification
 
