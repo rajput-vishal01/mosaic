@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 
-import { requireSuperadmin } from "@/lib/auth/session";
+import { requireAgencyManager, requireSuperadmin } from "@/lib/auth/session";
 import { auth } from "@/lib/auth/server";
+import { provisioningAuth } from "@/lib/auth/provisioning";
 import { db } from "@/lib/db";
 import { agencyProfile } from "@/lib/db/schema";
 
@@ -60,18 +61,17 @@ const userSchema = z.object({
 });
 
 export async function createAgencyUser(_state: AgencyActionState, formData: FormData): Promise<AgencyActionState> {
-  await requireSuperadmin();
   const parsed = userSchema.safeParse({
     agencyId: formData.get("agencyId"), name: formData.get("name"), email: formData.get("email"),
     password: formData.get("password"), agencyRole: formData.get("agencyRole"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the user details." };
+  await requireAgencyManager(parsed.data.agencyId);
 
   try {
     const requestHeaders = await headers();
-    const created = await auth.api.createUser({
-      headers: requestHeaders,
-      body: { email: parsed.data.email, password: parsed.data.password, name: parsed.data.name, role: "user" },
+    const created = await provisioningAuth.api.signUpEmail({
+      body: { email: parsed.data.email, password: parsed.data.password, name: parsed.data.name },
     });
     await auth.api.addMember({
       headers: requestHeaders,
@@ -82,6 +82,20 @@ export async function createAgencyUser(_state: AgencyActionState, formData: Form
   } catch {
     return { error: "The user could not be created. The email may already be registered." };
   }
+}
+
+const removeMemberSchema = z.object({ agencyId: z.string().min(1), memberId: z.string().min(1), userId: z.string().min(1) });
+
+export async function removeAgencyMember(formData: FormData) {
+  const parsed = removeMemberSchema.safeParse({ agencyId: formData.get("agencyId"), memberId: formData.get("memberId"), userId: formData.get("userId") });
+  if (!parsed.success) return;
+  const manager = await requireAgencyManager(parsed.data.agencyId);
+  if (parsed.data.userId === manager.session.user.id) return;
+  await auth.api.removeMember({
+    headers: await headers(),
+    body: { memberIdOrEmail: parsed.data.memberId, organizationId: parsed.data.agencyId },
+  });
+  revalidatePath(`/dashboard/agencies/${parsed.data.agencyId}`);
 }
 
 const userStatusSchema = z.object({ userId: z.string().min(1), agencyId: z.string().min(1), action: z.enum(["suspend", "restore"]) });

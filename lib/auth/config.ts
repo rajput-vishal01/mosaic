@@ -7,14 +7,16 @@ import { db } from "@/lib/db/client";
 import * as schema from "@/lib/db/schema";
 import { platformRoles } from "./roles";
 
-export const auth = betterAuth({
+export function createMosaicAuth({ allowSignup = false, autoSignIn = true } = {}) {
+  return betterAuth({
   appName: "Mosaic",
   baseURL: process.env.BETTER_AUTH_URL,
   secret: process.env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, { provider: "pg", schema }),
   emailAndPassword: {
     enabled: true,
-    disableSignUp: true,
+    disableSignUp: !allowSignup,
+    autoSignIn,
     requireEmailVerification: false,
   },
   session: {
@@ -40,6 +42,9 @@ export const auth = betterAuth({
       requireEmailVerificationOnInvitation: true,
     }),
   ],
-});
+  });
+}
+
+export const auth = createMosaicAuth();
 
 export type AuthSession = typeof auth.$Infer.Session;

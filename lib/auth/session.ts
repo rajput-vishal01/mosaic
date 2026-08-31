@@ -44,3 +44,21 @@ export const getAgencyContext = cache(async () => {
 
   return context ? { ...context, status: context.status ?? "active" } : null;
 });
+
+export async function requireAgencyManager(agencyId: string) {
+  const session = await requireSession();
+  if (isSuperadmin(session.user.role)) return { session, role: "superadmin" as const };
+
+  const [membership] = await db
+    .select({ role: member.role, status: agencyProfile.status })
+    .from(member)
+    .leftJoin(agencyProfile, eq(agencyProfile.organizationId, member.organizationId))
+    .where(and(eq(member.userId, session.user.id), eq(member.organizationId, agencyId)))
+    .limit(1);
+
+  if (membership?.role !== "admin" || membership.status === "suspended") {
+    redirect("/dashboard");
+  }
+
+  return { session, role: "admin" as const };
+}
