@@ -3,7 +3,7 @@ import "server-only";
 import { count, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { agencyProfile, member, organization, user } from "@/lib/db/schema";
+import { agencyProfile, invitation, member, organization, user } from "@/lib/db/schema";
 
 export async function listAgencies() {
   return db
@@ -39,5 +39,11 @@ export async function getAgencyWithMembers(agencyId: string) {
     .where(eq(member.organizationId, agencyId))
     .orderBy(user.name);
 
-  return { ...agency, status: agency.status ?? "active", members };
+  const invitations = await db
+    .select({ id: invitation.id, email: invitation.email, role: invitation.role, status: invitation.status, expiresAt: invitation.expiresAt })
+    .from(invitation)
+    .where(eq(invitation.organizationId, agencyId))
+    .orderBy(invitation.createdAt);
+
+  return { ...agency, status: agency.status ?? "active", members, invitations };
 }

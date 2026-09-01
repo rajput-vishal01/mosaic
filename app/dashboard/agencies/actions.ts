@@ -1,5 +1,6 @@
 "use server";
 
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
@@ -8,7 +9,7 @@ import { requireAgencyManager, requireSuperadmin } from "@/lib/auth/session";
 import { auth } from "@/lib/auth/server";
 import { provisioningAuth } from "@/lib/auth/provisioning";
 import { db } from "@/lib/db";
-import { agencyProfile } from "@/lib/db/schema";
+import { agencyProfile, invitation } from "@/lib/db/schema";
 
 const agencySchema = z.object({
   name: z.string().trim().min(2, "Enter an agency name.").max(80),
@@ -33,6 +34,25 @@ export async function createAgency(_state: AgencyActionState, formData: FormData
     return { success: `${created.name} was created.` };
   } catch {
     return { error: "That agency slug is already in use or could not be created." };
+  }
+}
+
+const updateAgencySchema = agencySchema.extend({ agencyId: z.string().min(1) });
+
+export async function updateAgency(_state: AgencyActionState, formData: FormData): Promise<AgencyActionState> {
+  await requireSuperadmin();
+  const parsed = updateAgencySchema.safeParse({ agencyId: formData.get("agencyId"), name: formData.get("name"), slug: formData.get("slug") });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the agency details." };
+  try {
+    await auth.api.updateOrganization({
+      headers: await headers(),
+      body: { organizationId: parsed.data.agencyId, data: { name: parsed.data.name, slug: parsed.data.slug } },
+    });
+    revalidatePath("/dashboard/agencies");
+    revalidatePath(`/dashboard/agencies/${parsed.data.agencyId}`);
+    return { success: "Agency details updated." };
+  } catch {
+    return { error: "The agency could not be updated. The slug may already be in use." };
   }
 }
 
@@ -112,4 +132,53 @@ export async function setAgencyUserStatus(formData: FormData) {
     await auth.api.unbanUser({ headers: requestHeaders, body: { userId: parsed.data.userId } });
   }
   revalidatePath(`/dashboard/agencies/${parsed.data.agencyId}`);
+}
+
+const invitationSchema = z.object({
+  agencyId: z.string().min(1),
+  email: z.email("Enter a valid email address."),
+  agencyRole: z.enum(["admin", "member"]),
+});
+
+export async function inviteAgencyUser(_state: AgencyActionState, formData: FormData): Promise<AgencyActionState> {
+  const parsed = invitationSchema.safeParse({ agencyId: formData.get("agencyId"), email: formData.get("email"), agencyRole: formData.get("agencyRole") });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the invitation details." };
+  await requireAgencyManager(parsed.data.agencyId);
+  try {
+    await auth.api.createInvitation({
+      headers: await headers(),
+      body: { email: parsed.data.email, role: parsed.data.agencyRole, organizationId: parsed.data.agencyId },
+    });
+    revalidatePath(`/dashboard/agencies/${parsed.data.agencyId}`);
+    return { success: `Invitation sent to ${parsed.data.email}.` };
+  } catch {
+    return { error: "The invitation could not be sent. The user may already be a member or have a pending invitation." };
+  }
+}
+
+const invitationMutationSchema = z.object({ agencyId: z.string().min(1), invitationId: z.string().min(1) });
+
+async function getManagedInvitation(formData: FormData) {
+  const parsed = invitationMutationSchema.safeParse({ agencyId: formData.get("agencyId"), invitationId: formData.get("invitationId") });
+  if (!parsed.success) return null;
+  await requireAgencyManager(parsed.data.agencyId);
+  const [record] = await db.select().from(invitation).where(and(eq(invitation.id, parsed.data.invitationId), eq(invitation.organizationId, parsed.data.agencyId))).limit(1);
+  return record ? { ...parsed.data, record } : null;
+}
+
+export async function resendAgencyInvitation(formData: FormData) {
+  const managed = await getManagedInvitation(formData);
+  if (!managed || managed.record.status !== "pending") return;
+  await auth.api.createInvitation({
+    headers: await headers(),
+    body: { email: managed.record.email, role: managed.record.role as "admin" | "member", organizationId: managed.agencyId, resend: true },
+  });
+  revalidatePath(`/dashboard/agencies/${managed.agencyId}`);
+}
+
+export async function cancelAgencyInvitation(formData: FormData) {
+  const managed = await getManagedInvitation(formData);
+  if (!managed || managed.record.status !== "pending") return;
+  await auth.api.cancelInvitation({ headers: await headers(), body: { invitationId: managed.invitationId } });
+  revalidatePath(`/dashboard/agencies/${managed.agencyId}`);
 }

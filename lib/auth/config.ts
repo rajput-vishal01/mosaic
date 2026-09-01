@@ -6,7 +6,7 @@ import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import { db } from "@/lib/db/client";
 import * as schema from "@/lib/db/schema";
 import { platformRoles } from "./roles";
-import { sendPasswordResetEmail } from "@/lib/email/send";
+import { sendAgencyInvitationEmail, sendPasswordResetEmail } from "@/lib/email/send";
 
 export function createMosaicAuth({ allowSignup = false, autoSignIn = true } = {}) {
   return betterAuth({
@@ -45,6 +45,15 @@ export function createMosaicAuth({ allowSignup = false, autoSignIn = true } = {}
       creatorRole: "admin",
       disableOrganizationDeletion: true,
       requireEmailVerificationOnInvitation: true,
+      invitationExpiresIn: 60 * 60 * 48,
+      sendInvitationEmail: async ({ email, organization, inviter, invitation }) => {
+        await sendAgencyInvitationEmail({
+          email,
+          agencyName: organization.name,
+          inviterName: inviter.user.name,
+          invitationId: invitation.id,
+        });
+      },
     }),
   ],
   });
