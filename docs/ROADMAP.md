@@ -54,7 +54,7 @@ This roadmap follows GSD's vertical-MVP approach. Each phase ends in observable 
 
 ## Phase 2: Account access control
 
-**Status:** In progress — domain model, fixture catalog, per-client grants, and audit viewer delivered (2026-09-01)
+**Status:** In progress — domain model, searchable fixture catalog, multi-client grants, scope resolver, and filtered audit viewer delivered (2026-09-01)
 
 **Goal:** Prove the central domain rule that membership does not equal data access.
 

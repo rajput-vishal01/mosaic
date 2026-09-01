@@ -33,9 +33,9 @@
 
 ### Account grants
 
-- [ ] **GRANT-01**: An authorized administrator can grant a client user access to selected source accounts already available to the user's agency.
-- [ ] **GRANT-02**: Two users in the same agency can have identical, overlapping, or completely different account grants.
-- [ ] **GRANT-03**: An agency admin cannot view or grant source accounts belonging exclusively to another agency.
+- [x] **GRANT-01**: An authorized administrator can grant a client user access to selected source accounts already available to the user's agency.
+- [x] **GRANT-02**: Two users in the same agency can have identical, overlapping, or completely different account grants.
+- [x] **GRANT-03**: An agency admin cannot view or grant source accounts belonging exclusively to another agency.
 - [ ] **GRANT-04**: Revoking an account grant prevents new dashboard tokens and report deliveries for that scope immediately.
 
 ### Data ingestion and freshness
@@ -98,9 +98,9 @@
 | TEN-03 | 1 | Complete |
 | TEN-04 | 1 | Complete |
 | TEN-05 | 2 | Pending |
-| GRANT-01 | 2 | Pending |
-| GRANT-02 | 2 | Pending |
-| GRANT-03 | 2 | Pending |
+| GRANT-01 | 2 | Complete |
+| GRANT-02 | 2 | Complete |
+| GRANT-03 | 2 | Complete |
 | GRANT-04 | 2 | Pending |
 | CONN-01 | 3 | Pending |
 | CONN-06 | 3 | Pending |
@@ -136,4 +136,4 @@
 
 ---
 
-*Last updated: 2026-09-01 after Phase 1 browser and CI verification.*
+*Last updated: 2026-09-01 after multi-client account-grant and isolation verification.*

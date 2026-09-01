@@ -1,3 +1,6 @@
+export const providerKeys = ["ga4", "google_ads", "meta_ads", "google_search_console", "google_business_profile"] as const;
+export type ProviderKey = (typeof providerKeys)[number];
+
 export const fixtureSourceAccounts = [
   { provider: "ga4", externalAccountId: "ga4-northstar", name: "Northstar Web Analytics", metadata: { propertyId: "100001" } },
   { provider: "ga4", externalAccountId: "ga4-harbor", name: "Harbor Web Analytics", metadata: { propertyId: "100002" } },
@@ -9,9 +12,7 @@ export const fixtureSourceAccounts = [
   { provider: "google_search_console", externalAccountId: "gsc-harbor", name: "Harbor Search Console", metadata: { siteUrl: "https://harbor.example" } },
   { provider: "google_business_profile", externalAccountId: "gbp-northstar", name: "Northstar Business Profile", metadata: { locationId: "400001" } },
   { provider: "google_business_profile", externalAccountId: "gbp-harbor", name: "Harbor Business Profile", metadata: { locationId: "400002" } },
-] as const;
-
-export type ProviderKey = (typeof fixtureSourceAccounts)[number]["provider"];
+] as const satisfies ReadonlyArray<{ provider: ProviderKey; externalAccountId: string; name: string; metadata: Record<string, string> }>;
 
 export const providerLabels: Record<ProviderKey, string> = {
   ga4: "Google Analytics 4",

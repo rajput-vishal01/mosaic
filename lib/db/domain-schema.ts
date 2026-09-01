@@ -94,7 +94,10 @@ export const userAccountGrant = pgTable(
     grantedByUserId: text("granted_by_user_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [uniqueIndex("user_account_grant_account_member_unique").on(table.agencyAccountId, table.memberId)],
+  (table) => [
+    uniqueIndex("user_account_grant_account_member_unique").on(table.agencyAccountId, table.memberId),
+    index("user_account_grant_member_idx").on(table.memberId),
+  ],
 );
 
 export const auditResult = pgEnum("audit_result", ["allowed", "denied"]);
@@ -126,7 +129,9 @@ export const auditEvent = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
+    index("audit_event_created_idx").on(table.createdAt),
     index("audit_event_agency_created_idx").on(table.agencyId, table.createdAt),
     index("audit_event_actor_created_idx").on(table.actorUserId, table.createdAt),
+    index("audit_event_resource_result_created_idx").on(table.resourceType, table.result, table.createdAt),
   ],
 );

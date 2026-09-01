@@ -3,31 +3,10 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { agencyAccount, auditEvent, member, providerAuthorization, sourceAccount, userAccountGrant } from "@/lib/db/schema";
+import { agencyAccount, member, providerAuthorization, sourceAccount, userAccountGrant } from "@/lib/db/schema";
+import { recordAuditEvent } from "@/features/audit/commands";
 import { fixtureAuthorizationLabel, fixtureSourceAccounts } from "./fixtures";
 import { isGrantScopeValid } from "./policy";
-
-type AuditInput = {
-  actorUserId: string;
-  agencyId?: string;
-  resourceType: typeof auditEvent.$inferInsert.resourceType;
-  resourceId: string;
-  action: string;
-  result: typeof auditEvent.$inferInsert.result;
-  details?: typeof auditEvent.$inferInsert.details;
-};
-
-export async function recordAuditEvent(input: AuditInput) {
-  await db.insert(auditEvent).values({
-    actorUserId: input.actorUserId,
-    agencyId: input.agencyId,
-    resourceType: input.resourceType,
-    resourceId: input.resourceId,
-    action: input.action,
-    result: input.result,
-    details: input.details ?? {},
-  });
-}
 
 export async function seedFixtureAccounts(actorUserId: string) {
   for (const fixture of fixtureSourceAccounts) {

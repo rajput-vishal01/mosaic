@@ -10,7 +10,7 @@ import { auth } from "@/lib/auth/server";
 import { provisioningAuth } from "@/lib/auth/provisioning";
 import { db } from "@/lib/db";
 import { agencyProfile, invitation } from "@/lib/db/schema";
-import { recordAuditEvent } from "@/features/account-grants/commands";
+import { recordAuditEvent } from "@/features/audit/commands";
 
 const agencySchema = z.object({
   name: z.string().trim().min(2, "Enter an agency name.").max(80),

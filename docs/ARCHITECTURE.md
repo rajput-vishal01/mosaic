@@ -139,6 +139,8 @@ Every warehouse-facing row or secure view exposes an immutable `account_scope_id
 
 Phase 2 implements this model with non-secret fixture source accounts covering all five provider types. The fixtures validate agency availability and per-client grant behavior without pretending that a provider is connected. Airbyte discovery will populate the same `provider_authorization` and `source_account` boundary in later phases; provider credentials never belong in these application tables.
 
+The server-only account authorization module resolves immutable scope IDs directly from current grants while also requiring an active user, agency, and provider authorization. Dashboard guest-token and report-delivery adapters must call this resolver at issuance time; they cannot accept browser-provided scope IDs or persist an earlier grant snapshot.
+
 ## Authorization model
 
 Authorization uses two layers:
