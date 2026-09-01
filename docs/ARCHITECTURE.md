@@ -137,6 +137,8 @@ Better Auth owns its user, session, organization, membership, and invitation tab
 
 Every warehouse-facing row or secure view exposes an immutable `account_scope_id`. Superset guest tokens receive only the account scopes resolved from `user_account_grant` on the server.
 
+Phase 2 implements this model with non-secret fixture source accounts covering all five provider types. The fixtures validate agency availability and per-client grant behavior without pretending that a provider is connected. Airbyte discovery will populate the same `provider_authorization` and `source_account` boundary in later phases; provider credentials never belong in these application tables.
+
 ## Authorization model
 
 Authorization uses two layers:

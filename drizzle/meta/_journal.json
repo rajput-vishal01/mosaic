@@ -15,6 +15,13 @@
       "when": 1788177325979,
       "tag": "0001_broken_sabretooth",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788254426333,
+      "tag": "0002_hot_bill_hollister",
+      "breakpoints": true
     }
   ]
 }

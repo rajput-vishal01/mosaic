@@ -21,7 +21,7 @@ Development authentication emails are captured by Mailpit at `http://localhost:8
 
 Run `npm run lint`, `npm test`, `npm run typecheck`, and `npm run build` before pushing a feature slice. Development PostgreSQL listens on port `5436` to avoid common local collisions.
 
-The identity and tenant browser journey also requires PostgreSQL and Mailpit from the development Compose file. Install Chromium once with `npx playwright install chromium`, then run `npm run test:e2e`. The test starts Mosaic on port `3100`, creates isolated timestamped records, follows real invitation and password-reset emails through Mailpit, and verifies the platform, agency-admin, and client authorization boundaries.
+The identity, tenant, and account-grant browser journeys also require PostgreSQL and Mailpit from the development Compose file. Install Chromium once with `npx playwright install chromium`, then run `npm run test:e2e`. The tests start Mosaic on port `3100`, create isolated timestamped records, follow real invitation and password-reset emails through Mailpit, and verify platform, agency-admin, client, cross-agency, and grant-revocation boundaries.
 
 GitHub Actions repeats migrations, superadmin bootstrap, static checks, the production build, and the browser journey against clean PostgreSQL and Mailpit services on every push and pull request.
 

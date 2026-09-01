@@ -10,6 +10,7 @@ import { auth } from "@/lib/auth/server";
 import { provisioningAuth } from "@/lib/auth/provisioning";
 import { db } from "@/lib/db";
 import { agencyProfile, invitation } from "@/lib/db/schema";
+import { recordAuditEvent } from "@/features/account-grants/commands";
 
 const agencySchema = z.object({
   name: z.string().trim().min(2, "Enter an agency name.").max(80),
@@ -19,7 +20,7 @@ const agencySchema = z.object({
 export type AgencyActionState = { error?: string; success?: string };
 
 export async function createAgency(_state: AgencyActionState, formData: FormData): Promise<AgencyActionState> {
-  await requireSuperadmin();
+  const session = await requireSuperadmin();
   const parsed = agencySchema.safeParse({ name: formData.get("name"), slug: formData.get("slug") });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the agency details." };
 
@@ -29,6 +30,7 @@ export async function createAgency(_state: AgencyActionState, formData: FormData
       body: { ...parsed.data, keepCurrentActiveOrganization: true },
     });
     await db.insert(agencyProfile).values({ organizationId: created.id }).onConflictDoNothing();
+    await recordAuditEvent({ actorUserId: session.user.id, agencyId: created.id, resourceType: "agency", resourceId: created.id, action: "agency.create", result: "allowed" });
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/agencies");
     return { success: `${created.name} was created.` };
@@ -40,7 +42,7 @@ export async function createAgency(_state: AgencyActionState, formData: FormData
 const updateAgencySchema = agencySchema.extend({ agencyId: z.string().min(1) });
 
 export async function updateAgency(_state: AgencyActionState, formData: FormData): Promise<AgencyActionState> {
-  await requireSuperadmin();
+  const session = await requireSuperadmin();
   const parsed = updateAgencySchema.safeParse({ agencyId: formData.get("agencyId"), name: formData.get("name"), slug: formData.get("slug") });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the agency details." };
   try {
@@ -48,6 +50,7 @@ export async function updateAgency(_state: AgencyActionState, formData: FormData
       headers: await headers(),
       body: { organizationId: parsed.data.agencyId, data: { name: parsed.data.name, slug: parsed.data.slug } },
     });
+    await recordAuditEvent({ actorUserId: session.user.id, agencyId: parsed.data.agencyId, resourceType: "agency", resourceId: parsed.data.agencyId, action: "agency.update", result: "allowed" });
     revalidatePath("/dashboard/agencies");
     revalidatePath(`/dashboard/agencies/${parsed.data.agencyId}`);
     return { success: "Agency details updated." };
@@ -62,13 +65,14 @@ const statusSchema = z.object({
 });
 
 export async function setAgencyStatus(formData: FormData) {
-  await requireSuperadmin();
+  const session = await requireSuperadmin();
   const parsed = statusSchema.safeParse({ agencyId: formData.get("agencyId"), status: formData.get("status") });
   if (!parsed.success) return;
   await db
     .insert(agencyProfile)
     .values({ organizationId: parsed.data.agencyId, status: parsed.data.status })
     .onConflictDoUpdate({ target: agencyProfile.organizationId, set: { status: parsed.data.status, updatedAt: new Date() } });
+  await recordAuditEvent({ actorUserId: session.user.id, agencyId: parsed.data.agencyId, resourceType: "agency", resourceId: parsed.data.agencyId, action: parsed.data.status === "active" ? "agency.restore" : "agency.suspend", result: "allowed" });
   revalidatePath("/dashboard/agencies");
 }
 
@@ -86,7 +90,7 @@ export async function createAgencyUser(_state: AgencyActionState, formData: Form
     password: formData.get("password"), agencyRole: formData.get("agencyRole"),
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the user details." };
-  await requireAgencyManager(parsed.data.agencyId);
+  const manager = await requireAgencyManager(parsed.data.agencyId);
 
   try {
     const requestHeaders = await headers();
@@ -97,6 +101,7 @@ export async function createAgencyUser(_state: AgencyActionState, formData: Form
       headers: requestHeaders,
       body: { userId: created.user.id, role: parsed.data.agencyRole, organizationId: parsed.data.agencyId },
     });
+    await recordAuditEvent({ actorUserId: manager.session.user.id, agencyId: parsed.data.agencyId, resourceType: "user", resourceId: created.user.id, action: "agency_user.create", result: "allowed", details: { agencyRole: parsed.data.agencyRole } });
     revalidatePath(`/dashboard/agencies/${parsed.data.agencyId}`);
     return { success: `${created.user.name} can now sign in.` };
   } catch {
@@ -115,6 +120,7 @@ export async function removeAgencyMember(formData: FormData) {
     headers: await headers(),
     body: { memberIdOrEmail: parsed.data.memberId, organizationId: parsed.data.agencyId },
   });
+  await recordAuditEvent({ actorUserId: manager.session.user.id, agencyId: parsed.data.agencyId, resourceType: "user", resourceId: parsed.data.userId, action: "agency_user.remove", result: "allowed" });
   revalidatePath(`/dashboard/agencies/${parsed.data.agencyId}`);
 }
 
@@ -131,6 +137,7 @@ export async function setAgencyUserStatus(formData: FormData) {
   } else {
     await auth.api.unbanUser({ headers: requestHeaders, body: { userId: parsed.data.userId } });
   }
+  await recordAuditEvent({ actorUserId: session.user.id, agencyId: parsed.data.agencyId, resourceType: "security", resourceId: parsed.data.userId, action: parsed.data.action === "suspend" ? "user.suspend_and_revoke_sessions" : "user.restore", result: "allowed" });
   revalidatePath(`/dashboard/agencies/${parsed.data.agencyId}`);
 }
 
@@ -143,12 +150,13 @@ const invitationSchema = z.object({
 export async function inviteAgencyUser(_state: AgencyActionState, formData: FormData): Promise<AgencyActionState> {
   const parsed = invitationSchema.safeParse({ agencyId: formData.get("agencyId"), email: formData.get("email"), agencyRole: formData.get("agencyRole") });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the invitation details." };
-  await requireAgencyManager(parsed.data.agencyId);
+  const manager = await requireAgencyManager(parsed.data.agencyId);
   try {
     await auth.api.createInvitation({
       headers: await headers(),
       body: { email: parsed.data.email, role: parsed.data.agencyRole, organizationId: parsed.data.agencyId },
     });
+    await recordAuditEvent({ actorUserId: manager.session.user.id, agencyId: parsed.data.agencyId, resourceType: "user", resourceId: parsed.data.email, action: "invitation.create", result: "allowed", details: { agencyRole: parsed.data.agencyRole } });
     revalidatePath(`/dashboard/agencies/${parsed.data.agencyId}`);
     return { success: `Invitation sent to ${parsed.data.email}.` };
   } catch {
@@ -161,9 +169,9 @@ const invitationMutationSchema = z.object({ agencyId: z.string().min(1), invitat
 async function getManagedInvitation(formData: FormData) {
   const parsed = invitationMutationSchema.safeParse({ agencyId: formData.get("agencyId"), invitationId: formData.get("invitationId") });
   if (!parsed.success) return null;
-  await requireAgencyManager(parsed.data.agencyId);
+  const manager = await requireAgencyManager(parsed.data.agencyId);
   const [record] = await db.select().from(invitation).where(and(eq(invitation.id, parsed.data.invitationId), eq(invitation.organizationId, parsed.data.agencyId))).limit(1);
-  return record ? { ...parsed.data, record } : null;
+  return record ? { ...parsed.data, record, manager } : null;
 }
 
 export async function resendAgencyInvitation(formData: FormData) {
@@ -173,6 +181,7 @@ export async function resendAgencyInvitation(formData: FormData) {
     headers: await headers(),
     body: { email: managed.record.email, role: managed.record.role as "admin" | "member", organizationId: managed.agencyId, resend: true },
   });
+  await recordAuditEvent({ actorUserId: managed.manager.session.user.id, agencyId: managed.agencyId, resourceType: "user", resourceId: managed.invitationId, action: "invitation.resend", result: "allowed" });
   revalidatePath(`/dashboard/agencies/${managed.agencyId}`);
 }
 
@@ -180,5 +189,6 @@ export async function cancelAgencyInvitation(formData: FormData) {
   const managed = await getManagedInvitation(formData);
   if (!managed || managed.record.status !== "pending") return;
   await auth.api.cancelInvitation({ headers: await headers(), body: { invitationId: managed.invitationId } });
+  await recordAuditEvent({ actorUserId: managed.manager.session.user.id, agencyId: managed.agencyId, resourceType: "user", resourceId: managed.invitationId, action: "invitation.cancel", result: "allowed" });
   revalidatePath(`/dashboard/agencies/${managed.agencyId}`);
 }
