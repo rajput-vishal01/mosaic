@@ -15,6 +15,8 @@ This roadmap follows GSD's vertical-MVP approach. Each phase ends in observable 
 
 ## Phase 1: Identity and agency foundation
 
+**Status:** Complete (2026-09-01)
+
 **Goal:** Replace the starter interface with a secure Mosaic shell where superadmins, agency admins, and client users authenticate through a library-backed agency model.
 
 **Requirements:** AUTH-01, AUTH-02, AUTH-03, AUTH-04, TEN-01, TEN-02, TEN-03, TEN-04

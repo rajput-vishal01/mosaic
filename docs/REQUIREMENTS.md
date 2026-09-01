@@ -7,17 +7,17 @@
 
 ### Authentication and sessions
 
-- [ ] **AUTH-01**: An invited user can set a password, sign in with Mosaic credentials, remain signed in across refreshes, and sign out.
-- [ ] **AUTH-02**: A user can complete an expiring, single-use password reset flow without administrator access.
-- [ ] **AUTH-03**: An authorized administrator can invite a user and resend or cancel a pending invitation within the administrator's scope.
-- [ ] **AUTH-04**: An authorized administrator can revoke a user's active sessions and prevent subsequent access by suspending the user.
+- [x] **AUTH-01**: An invited user can set a password, sign in with Mosaic credentials, remain signed in across refreshes, and sign out.
+- [x] **AUTH-02**: A user can complete an expiring, single-use password reset flow without administrator access.
+- [x] **AUTH-03**: An authorized administrator can invite a user and resend or cancel a pending invitation within the administrator's scope.
+- [x] **AUTH-04**: An authorized administrator can revoke a user's active sessions and prevent subsequent access by suspending the user.
 
 ### Agencies and roles
 
-- [ ] **TEN-01**: A superadmin can create, update, suspend, and restore an agency.
-- [ ] **TEN-02**: A superadmin can assign an agency admin to one or more explicit agencies.
-- [ ] **TEN-03**: An agency admin can manage client users only inside an assigned agency.
-- [ ] **TEN-04**: A client user can access only client routes and resources explicitly available to that user.
+- [x] **TEN-01**: A superadmin can create, update, suspend, and restore an agency.
+- [x] **TEN-02**: A superadmin can assign an agency admin to one or more explicit agencies.
+- [x] **TEN-03**: An agency admin can manage client users only inside an assigned agency.
+- [x] **TEN-04**: A client user can access only client routes and resources explicitly available to that user.
 - [ ] **TEN-05**: A superadmin can inspect audit events for agency, user, connection, grant, dashboard, report, and security changes.
 
 ### Provider connections
@@ -89,14 +89,14 @@
 
 | Requirement | Phase | Status |
 |---|---:|---|
-| AUTH-01 | 1 | Pending |
-| AUTH-02 | 1 | Pending |
-| AUTH-03 | 1 | Pending |
-| AUTH-04 | 1 | Pending |
-| TEN-01 | 1 | Pending |
-| TEN-02 | 1 | Pending |
-| TEN-03 | 1 | Pending |
-| TEN-04 | 1 | Pending |
+| AUTH-01 | 1 | Complete |
+| AUTH-02 | 1 | Complete |
+| AUTH-03 | 1 | Complete |
+| AUTH-04 | 1 | Complete |
+| TEN-01 | 1 | Complete |
+| TEN-02 | 1 | Complete |
+| TEN-03 | 1 | Complete |
+| TEN-04 | 1 | Complete |
 | TEN-05 | 2 | Pending |
 | GRANT-01 | 2 | Pending |
 | GRANT-02 | 2 | Pending |
@@ -136,4 +136,4 @@
 
 ---
 
-*Last updated: 2026-08-31 after initial architecture planning.*
+*Last updated: 2026-09-01 after Phase 1 browser and CI verification.*

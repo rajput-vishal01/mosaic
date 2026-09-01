@@ -44,7 +44,9 @@ export function createMosaicAuth({ allowSignup = false, autoSignIn = true } = {}
         user.role?.split(",").includes(platformRoles.superadmin) ?? false,
       creatorRole: "admin",
       disableOrganizationDeletion: true,
-      requireEmailVerificationOnInvitation: true,
+      // Possession of the opaque emailed link plus an email/password sign-in is
+      // the verification boundary for existing Mosaic accounts.
+      requireEmailVerificationOnInvitation: false,
       invitationExpiresIn: 60 * 60 * 48,
       sendInvitationEmail: async ({ email, organization, inviter, invitation }) => {
         await sendAgencyInvitationEmail({

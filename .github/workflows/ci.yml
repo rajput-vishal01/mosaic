@@ -1,0 +1,57 @@
+name: CI
+
+permissions:
+  contents: read
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: mosaic
+          POSTGRES_USER: mosaic
+          POSTGRES_PASSWORD: mosaic
+        ports:
+          - 5436:5432
+        options: >-
+          --health-cmd "pg_isready -U mosaic -d mosaic"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      mailpit:
+        image: axllent/mailpit:v1.31.0
+        ports:
+          - 1026:1025
+          - 8026:8025
+    env:
+      DATABASE_URL: postgresql://mosaic:mosaic@127.0.0.1:5436/mosaic
+      BETTER_AUTH_SECRET: ci-only-mosaic-secret-with-at-least-32-characters
+      BETTER_AUTH_URL: http://localhost:3100
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+      SMTP_HOST: 127.0.0.1
+      SMTP_PORT: 1026
+      SMTP_SECURE: "false"
+      SMTP_FROM: "Mosaic CI <no-reply@mosaic.local>"
+      E2E_SUPERADMIN_EMAIL: admin@mosaic.local
+      E2E_SUPERADMIN_PASSWORD: MosaicLocalAdmin!2026
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate
+      - run: npm run auth:create-superadmin -- --email "$E2E_SUPERADMIN_EMAIL" --password "$E2E_SUPERADMIN_PASSWORD" --name "CI Admin"
+      - run: npx playwright install --with-deps chromium
+      - run: npm run lint
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run test:e2e

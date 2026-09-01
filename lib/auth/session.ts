@@ -26,23 +26,24 @@ export async function requireSuperadmin() {
   return session;
 }
 
-export const getAgencyContext = cache(async () => {
+export const getAgencyContexts = cache(async () => {
   const session = await getCurrentSession();
-  if (!session || isSuperadmin(session.user.role)) return null;
-
-  const activeOrganizationId = session.session.activeOrganizationId;
-  const filters = [eq(member.userId, session.user.id)];
-  if (activeOrganizationId) filters.push(eq(member.organizationId, activeOrganizationId));
-
-  const [context] = await db
+  if (!session || isSuperadmin(session.user.role)) return [];
+  const contexts = await db
     .select({ id: organization.id, name: organization.name, role: member.role, status: agencyProfile.status })
     .from(member)
     .innerJoin(organization, eq(organization.id, member.organizationId))
     .leftJoin(agencyProfile, eq(agencyProfile.organizationId, organization.id))
-    .where(and(...filters))
-    .limit(1);
+    .where(eq(member.userId, session.user.id));
 
-  return context ? { ...context, status: context.status ?? "active" } : null;
+  return contexts.map((context) => ({ ...context, status: context.status ?? "active" }));
+});
+
+export const getAgencyContext = cache(async () => {
+  const session = await getCurrentSession();
+  const contexts = await getAgencyContexts();
+  if (!session || contexts.length === 0) return null;
+  return contexts.find((context) => context.id === session.session.activeOrganizationId) ?? contexts[0] ?? null;
 });
 
 export async function requireAgencyManager(agencyId: string) {

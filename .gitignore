@@ -43,3 +43,5 @@ next-env.d.ts
 
 # local infrastructure
 /.data/
+/test-results/
+/playwright-report/
