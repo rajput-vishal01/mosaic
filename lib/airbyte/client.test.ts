@@ -2,7 +2,7 @@ import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { probeAirbyte } from "./client";
+import { getLatestAirbyteSync, probeAirbyte } from "./client";
 import type { AirbyteConfiguration } from "./config";
 
 const configuration: AirbyteConfiguration = {
@@ -58,5 +58,42 @@ describe("Airbyte health probe", () => {
     );
 
     await expect(probeAirbyte(configuration)).resolves.toMatchObject({ state: "invalid_response" });
+  });
+});
+
+describe("Airbyte latest synchronization", () => {
+  it("normalizes the latest documented sync job into Mosaic's snapshot contract", async () => {
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.get("http://airbyte.test/v1/jobs", ({ request }) => {
+        const query = new URL(request.url).searchParams;
+        expect(query.get("connectionId")).toBe("connection-id");
+        expect(query.get("jobType")).toBe("sync");
+        expect(query.get("limit")).toBe("1");
+        expect(query.get("orderBy")).toBe("updatedAt|DESC");
+        return HttpResponse.json({ data: [{ jobId: 42, status: "succeeded", jobType: "sync", startTime: "2026-09-02T08:00:00.000Z", lastUpdatedAt: "2026-09-02T08:03:00.000Z", connectionId: "connection-id", rowsSynced: 1200 }] });
+      }),
+    );
+
+    await expect(getLatestAirbyteSync(configuration, "connection-id")).resolves.toEqual({
+      state: "found",
+      snapshot: {
+        jobId: "42",
+        status: "succeeded",
+        recordsSynced: 1200,
+        startedAt: new Date("2026-09-02T08:00:00.000Z"),
+        completedAt: new Date("2026-09-02T08:03:00.000Z"),
+        failureType: null,
+      },
+    });
+  });
+
+  it("rejects a job returned for a different connection", async () => {
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.get("http://airbyte.test/v1/jobs", () => HttpResponse.json({ data: [{ jobId: 43, status: "running", jobType: "sync", startTime: "2026-09-02T08:00:00.000Z", connectionId: "another-connection" }] })),
+    );
+
+    await expect(getLatestAirbyteSync(configuration, "connection-id")).resolves.toMatchObject({ state: "invalid_response" });
   });
 });

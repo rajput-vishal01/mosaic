@@ -52,4 +52,38 @@ export interface AirbyteApiPaths {
       };
     };
   };
+  "/jobs": {
+    get: {
+      parameters: {
+        query?: {
+          connectionId?: string;
+          limit?: number;
+          jobType?: "sync" | "reset";
+          orderBy?: string;
+        };
+      };
+      responses: {
+        200: {
+          content: {
+            "application/json": {
+              data: Array<{
+                jobId: number;
+                status: "pending" | "queued" | "running" | "incomplete" | "failed" | "succeeded" | "cancelled";
+                jobType: "sync" | "reset" | "refresh" | "clear";
+                startTime: string;
+                connectionId: string;
+                lastUpdatedAt?: string;
+                duration?: string;
+                bytesSynced?: number;
+                rowsSynced?: number;
+              }>;
+              previous?: string;
+              next?: string;
+            };
+          };
+        };
+        403: { content: { "application/json": unknown } };
+      };
+    };
+  };
 }
