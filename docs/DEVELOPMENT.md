@@ -17,6 +17,14 @@ Public registration is intentionally disabled. The bootstrap command comes from 
 
 Development authentication emails are captured by Mailpit at `http://localhost:8026`; they are never delivered externally. Production must provide the `SMTP_*` variables shown in `.env.example`.
 
+## Airbyte development states
+
+Airbyte is not required for identity, agency, fixture-account, or grant development. Leave every `AIRBYTE_*` variable empty and the connection screen will show an intentional **Not configured** state.
+
+For a real service check, configure every `AIRBYTE_*` variable from `.env.example`. `AIRBYTE_API_URL` is the public API base ending in `/v1`, not the Airbyte web interface URL. Mosaic checks service health, obtains a fresh application token, and verifies workspace access. It never renders credentials or raw Airbyte errors.
+
+See [Phase 3 connector foundation](./PHASE-3-CONNECTOR-FOUNDATION.md) before provisioning Airbyte or implementing provider OAuth.
+
 ## Verification
 
 Run `npm run lint`, `npm test`, `npm run typecheck`, and `npm run build` before pushing a feature slice. Development PostgreSQL listens on port `5436` to avoid common local collisions.

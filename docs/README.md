@@ -10,6 +10,7 @@ This directory is the source of truth for the first Mosaic release. Mosaic is a 
 4. [Requirements](./REQUIREMENTS.md)
 5. [Delivery roadmap](./ROADMAP.md)
 6. [Local development](./DEVELOPMENT.md)
+7. [Phase 3 connector foundation](./PHASE-3-CONNECTOR-FOUNDATION.md)
 
 ## Decisions already made
 

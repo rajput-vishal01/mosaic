@@ -23,6 +23,10 @@ test("enforces platform, agency, and client boundaries", async ({ browser, page,
   const clientPassword = `MosaicClient!${nonce}`;
 
   await signIn(page, superadminEmail, superadminPassword);
+  await page.getByRole("link", { name: "Manage connections" }).click();
+  await expect(page.getByRole("heading", { name: "Connections" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Test connection" })).toBeDisabled();
+  await page.goto("/dashboard");
   await page.getByRole("link", { name: "Manage agencies" }).click();
   await page.getByLabel("Agency name").fill(initialAgencyName);
   await page.getByLabel("URL slug").fill(agencySlug);
@@ -51,6 +55,8 @@ test("enforces platform, agency, and client boundaries", async ({ browser, page,
   const agencyAdminPage = await agencyAdminContext.newPage();
   await signIn(agencyAdminPage, adminEmail, agencyPassword);
   await expect(agencyAdminPage.getByRole("link", { name: "Manage users" })).toBeVisible();
+  await agencyAdminPage.goto("/dashboard/connections");
+  await expect(agencyAdminPage).toHaveURL(/\/dashboard$/);
   await agencyAdminPage.goto("/dashboard/agencies");
   await expect(agencyAdminPage).toHaveURL(/\/dashboard$/);
 
