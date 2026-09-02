@@ -15,6 +15,7 @@ export async function listConnectionSummaries() {
       status: providerAuthorization.status,
       credentialStatus: providerAuthorization.credentialStatus,
       externalReference: providerAuthorization.externalReference,
+      airbyteSourceId: providerAuthorization.airbyteSourceId,
       airbyteConnectionId: providerAuthorization.airbyteConnectionId,
       accountCount: count(sourceAccount.id),
       syncStatus: syncSnapshot.status,

@@ -87,3 +87,26 @@ export async function completeGa4Connection(input: { authorizationId: string; co
     }
   });
 }
+
+export async function getGa4ConnectionForRevocation(authorizationId: string) {
+  const [authorization] = await db
+    .select({
+      id: providerAuthorization.id,
+      label: providerAuthorization.label,
+      sourceId: providerAuthorization.airbyteSourceId,
+      connectionId: providerAuthorization.airbyteConnectionId,
+    })
+    .from(providerAuthorization)
+    .where(and(eq(providerAuthorization.id, authorizationId), eq(providerAuthorization.provider, "ga4"), eq(providerAuthorization.status, "active")))
+    .limit(1);
+  return authorization?.sourceId && authorization.connectionId ? { ...authorization, sourceId: authorization.sourceId, connectionId: authorization.connectionId } : null;
+}
+
+export async function recordGa4RevocationResult(authorizationId: string, state: "deleted" | "partial") {
+  await db
+    .update(providerAuthorization)
+    .set(state === "deleted"
+      ? { status: "revoked", credentialStatus: "reconnect_required", airbyteSourceId: null, airbyteConnectionId: null, updatedAt: new Date() }
+      : { status: "error", credentialStatus: "error", airbyteConnectionId: null, updatedAt: new Date() })
+    .where(eq(providerAuthorization.id, authorizationId));
+}

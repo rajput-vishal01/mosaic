@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
 import { recordAuditEvent } from "@/features/audit/commands";
 import { refreshLinkedAirbyteSnapshots } from "@/features/connections/commands";
-import { createGa4OauthState, discardGa4OauthState } from "@/features/connections/ga4";
+import { createGa4OauthState, discardGa4OauthState, getGa4ConnectionForRevocation, recordGa4RevocationResult } from "@/features/connections/ga4";
 import { ga4SetupSchema } from "@/features/connections/ga4-schema";
-import { initiateGa4OAuth, probeAirbyte, type AirbyteProbeResult } from "@/lib/airbyte/client";
+import { deleteAirbyteSourceAndConnection, initiateGa4OAuth, probeAirbyte, type AirbyteProbeResult } from "@/lib/airbyte/client";
 import { getAirbyteConfiguration, isGa4OauthConfigured } from "@/lib/airbyte/config";
 import { requireSuperadmin } from "@/lib/auth/session";
 
@@ -92,4 +93,34 @@ export async function startGa4Authorization(_state: Ga4SetupState, formData: For
   }
 
   redirect(initiated.consentUrl);
+}
+
+export type RevokeConnectionState = { status: "idle" } | { status: "error" | "complete"; message: string };
+
+export async function revokeGa4Connection(_state: RevokeConnectionState, formData: FormData): Promise<RevokeConnectionState> {
+  const session = await requireSuperadmin();
+  const parsed = z.uuid().safeParse(formData.get("authorizationId"));
+  if (!parsed.success) return { status: "error", message: "The selected connection is invalid." };
+  const authorization = await getGa4ConnectionForRevocation(parsed.data);
+  if (!authorization) return { status: "error", message: "The GA4 connection is no longer active." };
+  const configuration = getAirbyteConfiguration();
+  if (configuration.state !== "ready") return { status: "error", message: "Airbyte must be configured before disconnecting this source." };
+
+  const result = await deleteAirbyteSourceAndConnection(configuration.configuration, { sourceId: authorization.sourceId, connectionId: authorization.connectionId });
+  if (result.state === "deleted" || result.state === "partial") await recordGa4RevocationResult(authorization.id, result.state);
+  await recordAuditEvent({
+    actorUserId: session.user.id,
+    resourceType: "connection",
+    resourceId: authorization.id,
+    action: "ga4.revoke",
+    result: result.state === "deleted" ? "allowed" : "denied",
+    details: { outcome: result.state },
+  });
+  revalidatePath("/dashboard/connections");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/analytics");
+
+  return result.state === "deleted"
+    ? { status: "complete", message: `${authorization.label} was disconnected. Historical warehouse data was retained.` }
+    : { status: "error", message: result.message };
 }

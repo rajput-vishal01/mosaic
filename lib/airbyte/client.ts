@@ -49,6 +49,10 @@ type AirbyteMutationFailure = { state: "authentication_failed" | "invalid_respon
 export type AirbyteOAuthResult = { state: "ready"; consentUrl: string } | AirbyteMutationFailure;
 export type AirbyteSourceResult = { state: "created"; sourceId: string } | AirbyteMutationFailure;
 export type AirbyteConnectionResult = { state: "created"; connectionId: string } | AirbyteMutationFailure;
+export type AirbyteDeleteResult =
+  | { state: "deleted" }
+  | { state: "partial"; message: string }
+  | AirbyteMutationFailure;
 
 function safeFailure(state: Exclude<AirbyteProbeResult["state"], "healthy">, message: string): AirbyteProbeResult {
   return { state, checkedAt: new Date().toISOString(), message };
@@ -225,6 +229,23 @@ export async function createAirbyteConnection(configuration: AirbyteConfiguratio
     if (!response.response.ok) return { state: "upstream_error", message: "Airbyte could not connect the GA4 source to the warehouse." };
     const parsed = connectionSchema.safeParse(response.data);
     return parsed.success ? { state: "created", connectionId: parsed.data.connectionId } : { state: "invalid_response", message: "Airbyte returned an invalid connection response." };
+  } catch {
+    return { state: "unavailable", message: "Mosaic could not reach Airbyte." };
+  }
+}
+
+export async function deleteAirbyteSourceAndConnection(configuration: AirbyteConfiguration, input: { sourceId: string; connectionId: string }): Promise<AirbyteDeleteResult> {
+  try {
+    const token = await requestAccessToken(configuration);
+    if (token.state !== "authenticated") return token;
+    const client = createAirbyteClient(configuration, token.accessToken);
+    const connection = await client.DELETE("/connections/{connectionId}", { params: { path: { connectionId: input.connectionId } } });
+    if (connection.response.status === 403) return { state: "authentication_failed", message: "The Airbyte application cannot delete warehouse connections." };
+    if (!connection.response.ok && connection.response.status !== 404) return { state: "upstream_error", message: "Airbyte could not delete the warehouse connection." };
+
+    const source = await client.DELETE("/sources/{sourceId}", { params: { path: { sourceId: input.sourceId } } });
+    if (source.response.status === 204 || source.response.status === 404) return { state: "deleted" };
+    return { state: "partial", message: "The warehouse connection was removed, but the Airbyte source still needs operator cleanup." };
   } catch {
     return { state: "unavailable", message: "Mosaic could not reach Airbyte." };
   }

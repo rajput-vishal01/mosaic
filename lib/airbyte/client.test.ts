@@ -2,7 +2,7 @@ import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { createAirbyteConnection, createGa4Source, getLatestAirbyteSync, initiateGa4OAuth, probeAirbyte } from "./client";
+import { createAirbyteConnection, createGa4Source, deleteAirbyteSourceAndConnection, getLatestAirbyteSync, initiateGa4OAuth, probeAirbyte } from "./client";
 import type { AirbyteConfiguration } from "./config";
 
 const configuration: AirbyteConfiguration = {
@@ -132,5 +132,31 @@ describe("Airbyte GA4 provisioning", () => {
       http.post("http://airbyte.test/v1/sources/initiateOAuth", () => HttpResponse.json({ redirect_url: "http://unsafe.test/oauth" })),
     );
     await expect(initiateGa4OAuth(configuration, "https://mosaic.test/callback")).resolves.toMatchObject({ state: "invalid_response" });
+  });
+
+  it("deletes the warehouse connection before its credential-bearing source", async () => {
+    const operations: string[] = [];
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.delete("http://airbyte.test/v1/connections/connection-id", () => {
+        operations.push("connection");
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.delete("http://airbyte.test/v1/sources/source-id", () => {
+        operations.push("source");
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    await expect(deleteAirbyteSourceAndConnection(configuration, { sourceId: "source-id", connectionId: "connection-id" })).resolves.toEqual({ state: "deleted" });
+    expect(operations).toEqual(["connection", "source"]);
+  });
+
+  it("reports partial cleanup when the connection is gone but the source remains", async () => {
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.delete("http://airbyte.test/v1/connections/connection-id", () => new HttpResponse(null, { status: 404 })),
+      http.delete("http://airbyte.test/v1/sources/source-id", () => HttpResponse.json({}, { status: 403 })),
+    );
+    await expect(deleteAirbyteSourceAndConnection(configuration, { sourceId: "source-id", connectionId: "connection-id" })).resolves.toMatchObject({ state: "partial" });
   });
 });

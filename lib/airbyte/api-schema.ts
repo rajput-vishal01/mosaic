@@ -127,6 +127,16 @@ export interface AirbyteApiPaths {
       };
     };
   };
+  "/sources/{sourceId}": {
+    delete: {
+      parameters: { path: { sourceId: string } };
+      responses: {
+        204: { content: never };
+        403: { content: { "application/json": unknown } };
+        404: { content: { "application/json": unknown } };
+      };
+    };
+  };
   "/connections": {
     post: {
       requestBody: {
@@ -142,6 +152,16 @@ export interface AirbyteApiPaths {
         200: { content: { "application/json": { connectionId: string } } };
         400: { content: { "application/json": unknown } };
         403: { content: { "application/json": unknown } };
+      };
+    };
+  };
+  "/connections/{connectionId}": {
+    delete: {
+      parameters: { path: { connectionId: string } };
+      responses: {
+        204: { content: never };
+        403: { content: { "application/json": unknown } };
+        404: { content: { "application/json": unknown } };
       };
     };
   };

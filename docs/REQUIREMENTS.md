@@ -136,4 +136,4 @@
 
 ---
 
-*Last updated: 2026-09-01 after multi-client account-grant and isolation verification.*
+*Last updated: 2026-09-02 after scoped dashboard-token, freshness, and connection-revocation verification.*
