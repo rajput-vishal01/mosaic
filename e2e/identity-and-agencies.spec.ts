@@ -26,6 +26,10 @@ test("enforces platform, agency, and client boundaries", async ({ browser, page,
   await page.getByRole("link", { name: "Manage connections" }).click();
   await expect(page.getByRole("heading", { name: "Connections" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Test connection" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Authorize with Google" })).toBeDisabled();
+  await page.goto("/api/connections/ga4/callback?state=invalid&secret_id=invalid");
+  await expect(page).toHaveURL(/\/dashboard\/connections\?ga4=invalid_callback$/);
+  await expect(page.getByText("The GA4 callback was incomplete.")).toBeVisible();
   await page.goto("/dashboard");
   await page.getByRole("link", { name: "Manage agencies" }).click();
   await page.getByLabel("Agency name").fill(initialAgencyName);

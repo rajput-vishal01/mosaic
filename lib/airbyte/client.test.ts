@@ -2,7 +2,7 @@ import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { getLatestAirbyteSync, probeAirbyte } from "./client";
+import { createAirbyteConnection, createGa4Source, getLatestAirbyteSync, initiateGa4OAuth, probeAirbyte } from "./client";
 import type { AirbyteConfiguration } from "./config";
 
 const configuration: AirbyteConfiguration = {
@@ -95,5 +95,42 @@ describe("Airbyte latest synchronization", () => {
     );
 
     await expect(getLatestAirbyteSync(configuration, "connection-id")).resolves.toMatchObject({ state: "invalid_response" });
+  });
+});
+
+describe("Airbyte GA4 provisioning", () => {
+  it("initiates OAuth with an exact Mosaic callback", async () => {
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.post("http://airbyte.test/v1/sources/initiateOAuth", async ({ request }) => {
+        expect(await request.json()).toEqual({ redirectUrl: "https://mosaic.test/api/connections/ga4/callback?state=state-id", workspaceId: configuration.workspaceId, sourceType: "google-analytics-data-api" });
+        return HttpResponse.json({ redirect_url: "https://accounts.google.com/o/oauth2/auth?client_id=airbyte" });
+      }),
+    );
+    await expect(initiateGa4OAuth(configuration, "https://mosaic.test/api/connections/ga4/callback?state=state-id")).resolves.toMatchObject({ state: "ready" });
+  });
+
+  it("creates a GA4 source and warehouse connection without returning the OAuth secret", async () => {
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.post("http://airbyte.test/v1/sources", async ({ request }) => {
+        expect(await request.json()).toEqual({ name: "Main GA4", workspaceId: configuration.workspaceId, secretId: "opaque-secret-id", configuration: { sourceType: "google-analytics-data-api", property_ids: ["123456789"], date_ranges_start_date: "2025-01-01" } });
+        return HttpResponse.json({ sourceId: "source-id" });
+      }),
+      http.post("http://airbyte.test/v1/connections", async ({ request }) => {
+        expect(await request.json()).toEqual({ name: "Main GA4", sourceId: "source-id", destinationId: configuration.destinationId });
+        return HttpResponse.json({ connectionId: "connection-id" });
+      }),
+    );
+    await expect(createGa4Source(configuration, { name: "Main GA4", secretId: "opaque-secret-id", propertyIds: ["123456789"], startDate: "2025-01-01" })).resolves.toEqual({ state: "created", sourceId: "source-id" });
+    await expect(createAirbyteConnection(configuration, { name: "Main GA4", sourceId: "source-id" })).resolves.toEqual({ state: "created", connectionId: "connection-id" });
+  });
+
+  it("rejects a non-HTTPS consent URL", async () => {
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.post("http://airbyte.test/v1/sources/initiateOAuth", () => HttpResponse.json({ redirect_url: "http://unsafe.test/oauth" })),
+    );
+    await expect(initiateGa4OAuth(configuration, "https://mosaic.test/callback")).resolves.toMatchObject({ state: "invalid_response" });
   });
 });

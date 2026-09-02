@@ -84,7 +84,7 @@ This roadmap follows GSD's vertical-MVP approach. Each phase ends in observable 
 
 ## Phase 3: GA4 end-to-end proof
 
-**Status:** In progress — typed Airbyte health boundary, redacted operator states, connection operations screen, persisted sync snapshots, and deterministic freshness states delivered (2026-09-02)
+**Status:** In progress — Airbyte health/jobs boundary, persisted freshness states, and replay-safe GA4 OAuth/source/connection provisioning delivered behind infrastructure readiness gates (2026-09-02)
 
 **Goal:** Deliver the smallest real vertical slice from operator authorization to isolated client analytics.
 

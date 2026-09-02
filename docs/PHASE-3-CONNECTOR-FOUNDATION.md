@@ -15,6 +15,8 @@ Phase 3 starts with a deliberately narrow control-plane boundary. Mosaic can now
 - A one-row-per-authorization `sync_snapshot` records the latest job, timing, row count, last successful refresh, and a sanitized failure classification.
 - One deterministic state mapper owns the precedence for not connected, reconnect required, syncing, healthy, stale, and failed UI states.
 - The typed adapter can read the latest documented Airbyte sync job for each linked connection, rejects cross-connection responses, and persists normalized snapshots on an operator refresh.
+- GA4 setup collects the intended numeric property boundary before authorization, uses an expiring single-use state tied to the superadmin, and consumes Airbyte's opaque `secret_id` directly into source creation.
+- The callback removes the secret reference from the browser URL immediately and persists only Airbyte source/connection identifiers. Automatic accessible-property discovery is still pending and is not implied by operator-supplied IDs.
 
 The checked-in API surface is intentionally narrow. Once a real self-managed Airbyte version is deployed, generate the complete client from that instance's OpenAPI schema and review the generated diff before adding OAuth mutations.
 
@@ -28,14 +30,17 @@ The checked-in API surface is intentionally narrow. Once a real self-managed Air
 | `AIRBYTE_WORKSPACE_ID` | Dedicated Mosaic workspace UUID |
 | `AIRBYTE_DESTINATION_ID` | Warehouse destination UUID used for connector creation |
 | `AIRBYTE_REQUEST_TIMEOUT_MS` | Server-to-server request deadline; defaults to 5000 ms |
+| `AIRBYTE_GA4_OAUTH_READY` | Explicit acknowledgement that GA4 workspace OAuth credentials are configured in Airbyte |
 
 All variables are server-only. An empty Airbyte configuration is a supported local fixture-development state. A partial or malformed configuration is surfaced as needing attention.
+
+GA4 authorization stays disabled until `AIRBYTE_GA4_OAUTH_READY=true`. Set it only after the self-managed workspace has a tested Google Analytics OAuth credential override; the flag is a deployment acknowledgement, not an OAuth secret.
 
 ## Local infrastructure finding
 
 The current workstation has Docker 29.7.2 and 16 CPUs, but exposes about 7.47 GiB of memory and does not currently have `abctl` installed. Airbyte's planned local deployment baseline is 8 GiB before Superset and the warehouse are added, so this checkpoint does not install a resource-starved cluster or introduce an unofficial Compose topology.
 
-The next live-infrastructure checkpoint needs a host with enough reserved memory, the supported `abctl` installation, a pinned Airbyte version, a private ingress, one Mosaic workspace, and one PostgreSQL warehouse destination. After that passes, GA4 operator OAuth initiation and callback completion can be built against the deployed schema.
+The next live-infrastructure checkpoint needs a host with enough reserved memory, the supported `abctl` installation, a pinned Airbyte version, a private ingress, one Mosaic workspace, and one PostgreSQL warehouse destination. After that passes, the implemented GA4 authorization and callback can be exercised against the deployed schema.
 
 ## OAuth and user-session boundary
 
@@ -45,7 +50,7 @@ Provider authorization belongs to the Mosaic operator. Airbyte stores and refres
 
 1. Provision private Airbyte and the warehouse destination on a sufficiently sized host.
 2. Generate and pin the API contract from the deployed Airbyte version.
-3. Add GA4 OAuth initiation and callback routes with correlation state and audit events.
-4. Create the Airbyte GA4 source and connection, storing only Airbyte identifiers in Mosaic.
-5. Discover GA4 properties into the existing `source_account` boundary.
+3. Install and test the GA4 workspace OAuth credential override, then exercise the implemented callback end to end.
+4. Verify source/connection recovery behavior against real Airbyte failures.
+5. Design and implement automatic accessible-property discovery; operator-supplied IDs remain explicit until then.
 6. Schedule server-side job polling and verify stale-data behavior against a live failed sync.

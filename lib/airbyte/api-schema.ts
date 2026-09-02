@@ -86,4 +86,63 @@ export interface AirbyteApiPaths {
       };
     };
   };
+  "/sources/initiateOAuth": {
+    post: {
+      requestBody: {
+        content: {
+          "application/json": {
+            redirectUrl: string;
+            workspaceId: string;
+            sourceType: "google-analytics-data-api";
+          };
+        };
+      };
+      responses: {
+        200: { content: { "application/json": { redirect_url: string } } };
+        400: { content: { "application/json": unknown } };
+        403: { content: { "application/json": unknown } };
+      };
+    };
+  };
+  "/sources": {
+    post: {
+      requestBody: {
+        content: {
+          "application/json": {
+            name: string;
+            workspaceId: string;
+            secretId: string;
+            configuration: {
+              sourceType: "google-analytics-data-api";
+              property_ids: string[];
+              date_ranges_start_date?: string;
+            };
+          };
+        };
+      };
+      responses: {
+        200: { content: { "application/json": { sourceId: string } } };
+        400: { content: { "application/json": unknown } };
+        403: { content: { "application/json": unknown } };
+      };
+    };
+  };
+  "/connections": {
+    post: {
+      requestBody: {
+        content: {
+          "application/json": {
+            name: string;
+            sourceId: string;
+            destinationId: string;
+          };
+        };
+      };
+      responses: {
+        200: { content: { "application/json": { connectionId: string } } };
+        400: { content: { "application/json": unknown } };
+        403: { content: { "application/json": unknown } };
+      };
+    };
+  };
 }

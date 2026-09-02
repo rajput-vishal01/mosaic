@@ -73,6 +73,24 @@ export const syncSnapshot = pgTable(
   (table) => [index("sync_snapshot_status_updated_idx").on(table.status, table.updatedAt)],
 );
 
+export const connectorOauthState = pgTable(
+  "connector_oauth_state",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    provider: providerKey("provider").notNull(),
+    label: text("label").notNull(),
+    propertyIds: jsonb("property_ids").$type<string[]>().notNull(),
+    startDate: text("start_date"),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("connector_oauth_state_actor_expires_idx").on(table.actorUserId, table.expiresAt)],
+);
+
 export const sourceAccount = pgTable(
   "source_account",
   {

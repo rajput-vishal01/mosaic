@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getAirbyteConfiguration, getSafeAirbyteConfigurationStatus } from "./config";
+import { getAirbyteConfiguration, getSafeAirbyteConfigurationStatus, isGa4OauthConfigured } from "./config";
 
 const validEnvironment = {
   AIRBYTE_API_URL: "http://airbyte.test/v1/",
@@ -38,5 +38,10 @@ describe("Airbyte configuration", () => {
     expect(serialized).not.toContain("client-secret");
     expect(serialized).not.toContain("client-id");
     expect(serialized).not.toContain(validEnvironment.AIRBYTE_WORKSPACE_ID);
+  });
+
+  it("requires an explicit acknowledgement that the GA4 OAuth override exists", () => {
+    expect(isGa4OauthConfigured({})).toBe(false);
+    expect(isGa4OauthConfigured({ AIRBYTE_GA4_OAUTH_READY: "true" })).toBe(true);
   });
 });

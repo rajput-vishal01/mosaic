@@ -67,3 +67,7 @@ export function getSafeAirbyteConfigurationStatus(environment: Environment = pro
   }
   return status;
 }
+
+export function isGa4OauthConfigured(environment: Environment = process.env) {
+  return environment.AIRBYTE_GA4_OAUTH_READY === "true";
+}

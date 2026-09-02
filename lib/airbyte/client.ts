@@ -18,6 +18,9 @@ const jobSchema = z.object({
   rowsSynced: z.number().int().nonnegative().optional(),
 });
 const jobsSchema = z.object({ data: z.array(jobSchema) });
+const oauthRedirectSchema = z.object({ redirect_url: z.url().refine((value) => new URL(value).protocol === "https:") });
+const sourceSchema = z.object({ sourceId: z.string().min(1) });
+const connectionSchema = z.object({ connectionId: z.string().min(1) });
 
 export type AirbyteProbeResult =
   | { state: "healthy"; checkedAt: string; workspaceName: string }
@@ -41,6 +44,11 @@ export type AirbyteLatestSyncResult =
       };
     }
   | { state: "authentication_failed" | "invalid_response" | "upstream_error" | "unavailable"; message: string };
+
+type AirbyteMutationFailure = { state: "authentication_failed" | "invalid_response" | "upstream_error" | "unavailable"; message: string };
+export type AirbyteOAuthResult = { state: "ready"; consentUrl: string } | AirbyteMutationFailure;
+export type AirbyteSourceResult = { state: "created"; sourceId: string } | AirbyteMutationFailure;
+export type AirbyteConnectionResult = { state: "created"; connectionId: string } | AirbyteMutationFailure;
 
 function safeFailure(state: Exclude<AirbyteProbeResult["state"], "healthy">, message: string): AirbyteProbeResult {
   return { state, checkedAt: new Date().toISOString(), message };
@@ -155,6 +163,68 @@ export async function getLatestAirbyteSync(configuration: AirbyteConfiguration, 
         failureType: status === "failed" ? "unknown" : null,
       },
     };
+  } catch {
+    return { state: "unavailable", message: "Mosaic could not reach Airbyte." };
+  }
+}
+
+export async function initiateGa4OAuth(configuration: AirbyteConfiguration, redirectUrl: string): Promise<AirbyteOAuthResult> {
+  try {
+    const token = await requestAccessToken(configuration);
+    if (token.state !== "authenticated") return token;
+    const client = createAirbyteClient(configuration, token.accessToken);
+    const response = await client.POST("/sources/initiateOAuth", {
+      body: { redirectUrl, workspaceId: configuration.workspaceId, sourceType: "google-analytics-data-api" },
+    });
+    if (response.response.status === 403) return { state: "authentication_failed", message: "The Airbyte application cannot initiate provider authorization." };
+    if (!response.response.ok) return { state: "upstream_error", message: "Airbyte could not initiate GA4 authorization." };
+    const parsed = oauthRedirectSchema.safeParse(response.data);
+    return parsed.success
+      ? { state: "ready", consentUrl: parsed.data.redirect_url }
+      : { state: "invalid_response", message: "Airbyte returned an invalid provider authorization URL." };
+  } catch {
+    return { state: "unavailable", message: "Mosaic could not reach Airbyte." };
+  }
+}
+
+export async function createGa4Source(configuration: AirbyteConfiguration, input: { name: string; secretId: string; propertyIds: string[]; startDate?: string }): Promise<AirbyteSourceResult> {
+  try {
+    const token = await requestAccessToken(configuration);
+    if (token.state !== "authenticated") return token;
+    const client = createAirbyteClient(configuration, token.accessToken);
+    const response = await client.POST("/sources", {
+      body: {
+        name: input.name,
+        workspaceId: configuration.workspaceId,
+        secretId: input.secretId,
+        configuration: {
+          sourceType: "google-analytics-data-api",
+          property_ids: input.propertyIds,
+          ...(input.startDate ? { date_ranges_start_date: input.startDate } : {}),
+        },
+      },
+    });
+    if (response.response.status === 403) return { state: "authentication_failed", message: "The Airbyte application cannot create GA4 sources." };
+    if (!response.response.ok) return { state: "upstream_error", message: "Airbyte could not create the GA4 source." };
+    const parsed = sourceSchema.safeParse(response.data);
+    return parsed.success ? { state: "created", sourceId: parsed.data.sourceId } : { state: "invalid_response", message: "Airbyte returned an invalid source response." };
+  } catch {
+    return { state: "unavailable", message: "Mosaic could not reach Airbyte." };
+  }
+}
+
+export async function createAirbyteConnection(configuration: AirbyteConfiguration, input: { name: string; sourceId: string }): Promise<AirbyteConnectionResult> {
+  try {
+    const token = await requestAccessToken(configuration);
+    if (token.state !== "authenticated") return token;
+    const client = createAirbyteClient(configuration, token.accessToken);
+    const response = await client.POST("/connections", {
+      body: { name: input.name, sourceId: input.sourceId, destinationId: configuration.destinationId },
+    });
+    if (response.response.status === 403) return { state: "authentication_failed", message: "The Airbyte application cannot create warehouse connections." };
+    if (!response.response.ok) return { state: "upstream_error", message: "Airbyte could not connect the GA4 source to the warehouse." };
+    const parsed = connectionSchema.safeParse(response.data);
+    return parsed.success ? { state: "created", connectionId: parsed.data.connectionId } : { state: "invalid_response", message: "Airbyte returned an invalid connection response." };
   } catch {
     return { state: "unavailable", message: "Mosaic could not reach Airbyte." };
   }
