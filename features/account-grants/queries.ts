@@ -94,5 +94,5 @@ export async function getCurrentUserGrantedAccounts() {
   const agency = await getAgencyContext();
   if (!agency) return [];
   const accounts = await getGrantedAccountDisplay(session.user.id, agency.id);
-  return accounts.map((account) => ({ id: account.sourceAccountId, name: account.name, provider: account.provider, agencyId: agency.id, agencyName: agency.name }));
+  return accounts.map((account) => ({ id: account.sourceAccountId, name: account.name, provider: account.provider, agencyId: agency.id, agencyName: agency.name, health: account.health, lastSuccessfulAt: account.lastSuccessfulAt }));
 }

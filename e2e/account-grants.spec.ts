@@ -98,7 +98,9 @@ test("isolates agency account availability and client grants", async ({ browser,
   await signIn(clientPage, clientEmail, clientPassword);
   await expect(clientPage.getByRole("heading", { name: "Assigned accounts" })).toBeVisible();
   await expect(clientPage.getByText(accountName, { exact: true })).toBeVisible();
+  await expect(clientPage.getByText("Not connected", { exact: true })).toBeVisible();
   await clientPage.getByRole("link", { name: "Open analytics" }).click();
+  await expect(clientPage.getByText("Data unavailable", { exact: true })).toBeVisible();
   await expect(clientPage.getByRole("heading", { name: "Analytics service setup in progress" })).toBeVisible();
   expect((await clientPage.request.post("/api/dashboards/ga4/guest-token")).status()).toBe(503);
   await clientPage.goto(`${agencyUrl}/accounts`);
