@@ -1,4 +1,4 @@
-import { index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { member, organization, user } from "./auth-schema";
 
@@ -25,6 +25,7 @@ export const providerKey = pgEnum("provider_key", [
 ]);
 
 export const providerAuthorizationStatus = pgEnum("provider_authorization_status", ["active", "revoked", "error"]);
+export const providerCredentialStatus = pgEnum("provider_credential_status", ["unknown", "healthy", "reconnect_required", "error"]);
 
 export const providerAuthorization = pgTable(
   "provider_authorization",
@@ -33,7 +34,11 @@ export const providerAuthorization = pgTable(
     provider: providerKey("provider").notNull(),
     label: text("label").notNull(),
     status: providerAuthorizationStatus("status").default("active").notNull(),
+    credentialStatus: providerCredentialStatus("credential_status").default("unknown").notNull(),
     externalReference: text("external_reference"),
+    airbyteSourceId: text("airbyte_source_id"),
+    airbyteConnectionId: text("airbyte_connection_id"),
+    credentialsCheckedAt: timestamp("credentials_checked_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -41,6 +46,31 @@ export const providerAuthorization = pgTable(
       .notNull(),
   },
   (table) => [uniqueIndex("provider_authorization_provider_label_unique").on(table.provider, table.label)],
+);
+
+export const syncStatus = pgEnum("sync_status", ["idle", "pending", "running", "succeeded", "failed", "cancelled"]);
+export const syncFailureType = pgEnum("sync_failure_type", ["authentication", "authorization", "configuration", "rate_limit", "upstream", "unknown"]);
+
+export const syncSnapshot = pgTable(
+  "sync_snapshot",
+  {
+    authorizationId: uuid("authorization_id")
+      .primaryKey()
+      .references(() => providerAuthorization.id, { onDelete: "cascade" }),
+    jobId: text("job_id"),
+    status: syncStatus("status").default("idle").notNull(),
+    recordsSynced: bigint("records_synced", { mode: "number" }),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    lastSuccessfulAt: timestamp("last_successful_at"),
+    failureType: syncFailureType("failure_type"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("sync_snapshot_status_updated_idx").on(table.status, table.updatedAt)],
 );
 
 export const sourceAccount = pgTable(

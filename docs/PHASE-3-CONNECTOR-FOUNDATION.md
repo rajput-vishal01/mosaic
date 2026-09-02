@@ -11,6 +11,9 @@ Phase 3 starts with a deliberately narrow control-plane boundary. Mosaic can now
 - Only a superadmin can open the connection operations screen or invoke its Server Action.
 - Fixture authorization records are labeled as fixtures rather than live provider sessions.
 - Mock Service Worker covers the healthy path, rejected credentials, and a workspace-scope mismatch.
+- Provider authorizations now have explicit Airbyte source/connection identifiers and credential-health metadata; credentials themselves remain outside Mosaic.
+- A one-row-per-authorization `sync_snapshot` records the latest job, timing, row count, last successful refresh, and a sanitized failure classification.
+- One deterministic state mapper owns the precedence for not connected, reconnect required, syncing, healthy, stale, and failed UI states.
 
 The checked-in API surface is intentionally narrow. Once a real self-managed Airbyte version is deployed, generate the complete client from that instance's OpenAPI schema and review the generated diff before adding OAuth mutations.
 
@@ -44,4 +47,4 @@ Provider authorization belongs to the Mosaic operator. Airbyte stores and refres
 3. Add GA4 OAuth initiation and callback routes with correlation state and audit events.
 4. Create the Airbyte GA4 source and connection, storing only Airbyte identifiers in Mosaic.
 5. Discover GA4 properties into the existing `source_account` boundary.
-6. Add synchronization snapshots and product-safe job failure classification.
+6. Poll Airbyte jobs into the synchronization snapshot and verify stale-data behavior.
