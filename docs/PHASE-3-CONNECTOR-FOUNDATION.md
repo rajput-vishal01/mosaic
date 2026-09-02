@@ -17,6 +17,8 @@ Phase 3 starts with a deliberately narrow control-plane boundary. Mosaic can now
 - The typed adapter can read the latest documented Airbyte sync job for each linked connection, rejects cross-connection responses, and persists normalized snapshots on an operator refresh.
 - GA4 setup collects the intended numeric property boundary before authorization, uses an expiring single-use state tied to the superadmin, and consumes Airbyte's opaque `secret_id` directly into source creation.
 - The callback removes the secret reference from the browser URL immediately and persists only Airbyte source/connection identifiers. Automatic accessible-property discovery is still pending and is not implied by operator-supplied IDs.
+- The official Superset embedded SDK now owns iframe integration. Mosaic's token endpoint re-resolves current GA4 grants, builds a UUID-only `account_scope_id` clause, and issues a non-cacheable guest token through the server-side Superset service identity.
+- Client, agency-admin, and superadmin dashboard-route boundaries are explicit. The embed stays disabled until the deployment confirms Superset embedded mode and a non-empty Mosaic allowed-domain list.
 
 The checked-in API surface is intentionally narrow. Once a real self-managed Airbyte version is deployed, generate the complete client from that instance's OpenAPI schema and review the generated diff before adding OAuth mutations.
 
@@ -31,6 +33,12 @@ The checked-in API surface is intentionally narrow. Once a real self-managed Air
 | `AIRBYTE_DESTINATION_ID` | Warehouse destination UUID used for connector creation |
 | `AIRBYTE_REQUEST_TIMEOUT_MS` | Server-to-server request deadline; defaults to 5000 ms |
 | `AIRBYTE_GA4_OAUTH_READY` | Explicit acknowledgement that GA4 workspace OAuth credentials are configured in Airbyte |
+| `SUPERSET_URL` | Superset origin used by the server adapter and embedded SDK |
+| `SUPERSET_SERVICE_USERNAME` | Dedicated Superset service account username |
+| `SUPERSET_SERVICE_PASSWORD` | Dedicated Superset service account password |
+| `SUPERSET_GA4_DASHBOARD_ID` | Allowed embedded GA4 dashboard UUID |
+| `SUPERSET_REQUEST_TIMEOUT_MS` | Superset request deadline; defaults to 5000 ms |
+| `SUPERSET_EMBED_READY` | Acknowledgement that embedded mode and explicit allowed domains are hardened |
 
 All variables are server-only. An empty Airbyte configuration is a supported local fixture-development state. A partial or malformed configuration is surfaced as needing attention.
 

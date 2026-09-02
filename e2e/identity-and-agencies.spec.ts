@@ -59,6 +59,8 @@ test("enforces platform, agency, and client boundaries", async ({ browser, page,
   const agencyAdminPage = await agencyAdminContext.newPage();
   await signIn(agencyAdminPage, adminEmail, agencyPassword);
   await expect(agencyAdminPage.getByRole("link", { name: "Manage users" })).toBeVisible();
+  await agencyAdminPage.goto("/dashboard/analytics");
+  await expect(agencyAdminPage).toHaveURL(/\/dashboard$/);
   await agencyAdminPage.goto("/dashboard/connections");
   await expect(agencyAdminPage).toHaveURL(/\/dashboard$/);
   await agencyAdminPage.goto("/dashboard/agencies");
