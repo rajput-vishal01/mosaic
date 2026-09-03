@@ -24,6 +24,7 @@ Phase 3 starts with a deliberately narrow control-plane boundary. Mosaic can now
 - New Airbyte connections no longer inherit the API's manual-sync default. Mosaic creates an active UTC cron schedule at a validated 1, 2, 3, 4, 6, 8, 12, or 24-hour interval and asks Airbyte to disable the connection on non-breaking schema changes rather than silently drifting the reporting contract.
 - A separately migrated PostgreSQL warehouse now defines the GA4 reporting contract. Provider IDs map to immutable `account_scope_id` values in a private control schema, transforms write to a private fact table, and Superset receives SELECT only on a security-barrier reporting view that filters inactive scopes.
 - The Superset database role is a passwordless group role in Git; deployment creates its login through a secret manager. Automated verification proves control and transform objects are invisible, inactive scopes are filtered, active scopes are readable, and writes are denied.
+- Mosaic now publishes non-fixture provider-account mappings through one validated bulk warehouse function. The runtime role can execute that function but cannot read or write warehouse tables directly; UUID reassignment is rejected, publication is transactional, successful GA4 setup activates scopes, and revocation deactivates them. A superadmin retry action recovers cross-database publication failures.
 
 The checked-in API surface is intentionally narrow. Once a real self-managed Airbyte version is deployed, generate the complete client from that instance's OpenAPI schema and review the generated diff before adding OAuth mutations.
 
@@ -45,6 +46,8 @@ The checked-in API surface is intentionally narrow. Once a real self-managed Air
 | `SUPERSET_GA4_DASHBOARD_ID` | Allowed embedded GA4 dashboard UUID |
 | `SUPERSET_REQUEST_TIMEOUT_MS` | Superset request deadline; defaults to 5000 ms |
 | `SUPERSET_EMBED_READY` | Acknowledgement that embedded mode and explicit allowed domains are hardened |
+| `WAREHOUSE_SCOPE_DATABASE_URL` | Credential-bearing runtime URL for a login that belongs only to `mosaic_scope_writer` |
+| `WAREHOUSE_SCOPE_CONNECT_TIMEOUT_SECONDS` | Scope-publication connection timeout; defaults to 5 seconds |
 
 All variables are server-only. An empty Airbyte configuration is a supported local fixture-development state. A partial or malformed configuration is surfaced as needing attention.
 

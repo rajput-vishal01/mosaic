@@ -64,6 +64,7 @@ jobs:
       - run: npm run db:migrate
       - run: npm run warehouse:migrate
       - run: psql "$WAREHOUSE_ADMIN_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f warehouse/admin/create-superset-reader.sql
+      - run: psql "$WAREHOUSE_ADMIN_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f warehouse/admin/create-scope-writer.sql
       - run: npm run warehouse:verify
       - run: npm run auth:create-superadmin -- --email "$E2E_SUPERADMIN_EMAIL" --password "$E2E_SUPERADMIN_PASSWORD" --name "CI Admin"
       - run: npx playwright install --with-deps chromium

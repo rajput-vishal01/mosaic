@@ -5,10 +5,12 @@ import { providerLabels, type ProviderKey } from "@/features/account-grants/fixt
 import { listConnectionSummaries } from "@/features/connections/queries";
 import { getSafeAirbyteConfigurationStatus, isGa4OauthConfigured } from "@/lib/airbyte/config";
 import { requireSuperadmin } from "@/lib/auth/session";
+import { getSafeWarehouseScopeStatus } from "@/lib/warehouse/config";
 import { AirbyteTestForm } from "./airbyte-test-form";
 import { Ga4SetupForm } from "./ga4-setup-form";
 import { RevokeConnectionDialog } from "./revoke-connection-dialog";
 import { SyncRefreshForm } from "./sync-refresh-form";
+import { WarehouseScopeSyncForm } from "./warehouse-scope-sync-form";
 
 function configurationCopy(state: ReturnType<typeof getSafeAirbyteConfigurationStatus>["state"]) {
   if (state === "ready") return { label: "Ready to test", tone: "bg-emerald-50 text-emerald-700", description: "The service endpoint, application credentials, workspace, and warehouse destination are configured." };
@@ -34,16 +36,17 @@ const ga4ResultMessages: Record<string, { tone: string; message: string }> = {
   source_error: { tone: "border-rose-200 bg-rose-50 text-rose-800", message: "Airbyte could not create the GA4 source. Review the property IDs and try again." },
   registration_error: { tone: "border-rose-200 bg-rose-50 text-rose-800", message: "Mosaic could not register the GA4 source. Use a different connection name and try again." },
   connection_error: { tone: "border-amber-200 bg-amber-50 text-amber-800", message: "The GA4 source exists, but its warehouse connection needs recovery." },
+  warehouse_error: { tone: "border-amber-200 bg-amber-50 text-amber-800", message: "GA4 is connected, but its account scopes were not published. Retry from Warehouse account scopes before assigning clients." },
 };
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<{ ga4?: string }> }) {
   await requireSuperadmin();
   const query = await searchParams;
-  const [connections, airbyte] = await Promise.all([listConnectionSummaries(), Promise.resolve(getSafeAirbyteConfigurationStatus())]);
+  const [connections, airbyte, warehouse] = await Promise.all([listConnectionSummaries(), Promise.resolve(getSafeAirbyteConfigurationStatus()), Promise.resolve(getSafeWarehouseScopeStatus())]);
   const copy = configurationCopy(airbyte.state);
   const linkedConnectionCount = connections.filter((connection) => Boolean(connection.airbyteConnectionId)).length;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  const oauthReady = airbyte.state === "ready" && isGa4OauthConfigured() && Boolean(appUrl && URL.canParse(appUrl) && new URL(appUrl).protocol === "https:");
+  const oauthReady = airbyte.state === "ready" && warehouse.state === "ready" && isGa4OauthConfigured() && Boolean(appUrl && URL.canParse(appUrl) && new URL(appUrl).protocol === "https:");
   const ga4Result = query.ga4 ? ga4ResultMessages[query.ga4] : undefined;
 
   return (
@@ -85,6 +88,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
           <div><p className="text-sm font-medium text-slate-500">First live connector</p><h2 className="mt-1 font-semibold text-slate-950">Connect Google Analytics 4</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Choose the property boundary before opening Google authorization. Airbyte receives and retains the provider credentials; Mosaic retains only the resulting source and connection IDs.</p></div>
           <Ga4SetupForm enabled={oauthReady} />
         </section>
+
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2"><h2 className="font-semibold text-slate-950">Warehouse account scopes</h2><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${warehouse.state === "ready" ? "bg-emerald-50 text-emerald-700" : warehouse.state === "invalid" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{warehouse.state === "ready" ? "Ready" : warehouse.state === "invalid" ? "Needs attention" : "Not configured"}</span></div><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Publish canonical provider-account mappings to the private warehouse function. The runtime identity cannot read mappings or analytics facts.</p></div><WarehouseScopeSyncForm enabled={warehouse.state === "ready"} /></div></section>
 
         <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="font-semibold text-slate-950">Authorization catalog</h2><p className="mt-1 text-sm text-slate-500">Fixture records validate account grants; they are not live provider sessions.</p></div><SyncRefreshForm enabled={airbyte.state === "ready" && linkedConnectionCount > 0} /></div>

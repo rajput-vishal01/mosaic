@@ -8,9 +8,11 @@ import { recordAuditEvent } from "@/features/audit/commands";
 import { refreshLinkedAirbyteSnapshots } from "@/features/connections/commands";
 import { createGa4OauthState, discardGa4OauthState, getGa4ConnectionForRevocation, recordGa4RevocationResult } from "@/features/connections/ga4";
 import { ga4SetupSchema } from "@/features/connections/ga4-schema";
+import { publishCanonicalWarehouseScopes } from "@/features/connections/warehouse";
 import { deleteAirbyteSourceAndConnection, initiateGa4OAuth, probeAirbyte, type AirbyteProbeResult } from "@/lib/airbyte/client";
 import { getAirbyteConfiguration, isGa4OauthConfigured } from "@/lib/airbyte/config";
 import { requireSuperadmin } from "@/lib/auth/session";
+import { getWarehouseScopeConfiguration } from "@/lib/warehouse/config";
 
 export type AirbyteTestState =
   | { status: "idle" }
@@ -75,6 +77,7 @@ export async function startGa4Authorization(_state: Ga4SetupState, formData: For
 
   const configuration = getAirbyteConfiguration();
   if (configuration.state !== "ready") return { status: "error", message: "Complete the Airbyte configuration before connecting GA4." };
+  if (getWarehouseScopeConfiguration().state !== "ready") return { status: "error", message: "Configure the warehouse scope publisher before connecting GA4." };
   if (!isGa4OauthConfigured()) return { status: "error", message: "Configure the GA4 OAuth credential override in Airbyte before connecting GA4." };
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (!appUrl) return { status: "error", message: "Configure the public Mosaic application URL before connecting GA4." };
@@ -108,19 +111,38 @@ export async function revokeGa4Connection(_state: RevokeConnectionState, formDat
 
   const result = await deleteAirbyteSourceAndConnection(configuration.configuration, { sourceId: authorization.sourceId, connectionId: authorization.connectionId });
   if (result.state === "deleted" || result.state === "partial") await recordGa4RevocationResult(authorization.id, result.state);
+  const warehouseConfiguration = getWarehouseScopeConfiguration();
+  const scopeResult = (result.state === "deleted" || result.state === "partial") && warehouseConfiguration.state === "ready"
+    ? await publishCanonicalWarehouseScopes(warehouseConfiguration.configuration)
+    : null;
   await recordAuditEvent({
     actorUserId: session.user.id,
     resourceType: "connection",
     resourceId: authorization.id,
     action: "ga4.revoke",
-    result: result.state === "deleted" ? "allowed" : "denied",
-    details: { outcome: result.state },
+    result: result.state === "deleted" && scopeResult?.state === "published" ? "allowed" : "denied",
+    details: { outcome: result.state, warehouseOutcome: scopeResult?.state ?? "not_attempted" },
   });
   revalidatePath("/dashboard/connections");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/analytics");
 
   return result.state === "deleted"
-    ? { status: "complete", message: `${authorization.label} was disconnected. Historical warehouse data was retained.` }
+    ? scopeResult?.state === "published"
+      ? { status: "complete", message: `${authorization.label} was disconnected and its warehouse scopes were deactivated.` }
+      : { status: "error", message: `${authorization.label} was disconnected, but warehouse scope deactivation needs a retry.` }
+    : { status: "error", message: result.message };
+}
+
+export type WarehouseScopeSyncState = { status: "idle" } | { status: "error" | "complete"; message: string };
+
+export async function syncWarehouseAccountScopes(): Promise<WarehouseScopeSyncState> {
+  const session = await requireSuperadmin();
+  const configuration = getWarehouseScopeConfiguration();
+  if (configuration.state !== "ready") return { status: "error", message: "Configure the warehouse scope publisher before publishing mappings." };
+  const result = await publishCanonicalWarehouseScopes(configuration.configuration);
+  await recordAuditEvent({ actorUserId: session.user.id, resourceType: "connection", resourceId: "warehouse", action: "warehouse.scope_publish", result: result.state === "published" ? "allowed" : "denied", details: { outcome: result.state, count: result.state === "published" ? result.count : 0 } });
+  return result.state === "published"
+    ? { status: "complete", message: result.count === 1 ? "Published 1 account scope." : `Published ${result.count} account scopes.` }
     : { status: "error", message: result.message };
 }

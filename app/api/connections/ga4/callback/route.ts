@@ -3,10 +3,12 @@ import { z } from "zod";
 
 import { recordAuditEvent } from "@/features/audit/commands";
 import { claimGa4OauthState, completeGa4Connection, registerGa4Source } from "@/features/connections/ga4";
+import { publishCanonicalWarehouseScopes } from "@/features/connections/warehouse";
 import { createAirbyteConnection, createGa4Source } from "@/lib/airbyte/client";
 import { getAirbyteConfiguration } from "@/lib/airbyte/config";
 import { isSuperadmin } from "@/lib/auth/roles";
 import { auth } from "@/lib/auth/server";
+import { getWarehouseScopeConfiguration } from "@/lib/warehouse/config";
 
 const callbackSchema = z.object({ state: z.uuid(), secretId: z.string().min(1).max(500) });
 
@@ -58,6 +60,11 @@ export async function GET(request: NextRequest) {
   }
 
   await completeGa4Connection({ authorizationId: authorization.id, connectionId: connection.connectionId, propertyIds: oauthState.propertyIds });
-  await recordAuditEvent({ actorUserId: session.user.id, resourceType: "connection", resourceId: authorization.id, action: "ga4.connect", result: "allowed", details: { propertyCount: oauthState.propertyIds.length } });
+  const warehouseConfiguration = getWarehouseScopeConfiguration();
+  const scopeResult = warehouseConfiguration.state === "ready"
+    ? await publishCanonicalWarehouseScopes(warehouseConfiguration.configuration)
+    : { state: "unavailable" as const };
+  await recordAuditEvent({ actorUserId: session.user.id, resourceType: "connection", resourceId: authorization.id, action: "ga4.connect", result: scopeResult.state === "published" ? "allowed" : "denied", details: { propertyCount: oauthState.propertyIds.length, warehouseOutcome: scopeResult.state } });
+  if (scopeResult.state !== "published") return connectionRedirect(request, "warehouse_error");
   return connectionRedirect(request, "connected");
 }

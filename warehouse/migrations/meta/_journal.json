@@ -8,6 +8,27 @@
       "when": 1788427600018,
       "tag": "0000_material_pepper_potts",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788429381913,
+      "tag": "0001_scope_publisher",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788429546163,
+      "tag": "0002_bulk_scope_publisher",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788429859713,
+      "tag": "0003_harden_bulk_scope_input",
+      "breakpoints": true
     }
   ]
 }
