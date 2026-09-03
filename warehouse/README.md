@@ -21,4 +21,6 @@ Mosaic publishes mappings in batches through `mosaic_control.publish_account_sco
 
 The initial GA4 grain is one row per account scope, date, session default channel group, country, and device category. The metric names follow the Google Analytics Data API names selected for the first dashboard. Changes to this contract require a new forward migration; deployed migrations are never edited.
 
+Airbyte discovers and selects only the property-specific streams generated from the `mosaic_ga4_daily` custom report. Each source writes them under a deterministic `mosaic_<source-id-without-dashes>` namespace so authorization boundaries cannot collide in raw destination tables. The transformation that promotes those raw tables into `mosaic_transform.ga4_daily_metrics` must resolve each record's `property_id` through Mosaic's canonical account-scope mapping; it must never infer client authorization from a browser filter.
+
 The checked-in down scripts are only for rebuilding disposable local databases. Production rollback is always another reviewed forward migration.

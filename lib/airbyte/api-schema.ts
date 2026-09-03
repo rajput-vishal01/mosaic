@@ -115,6 +115,9 @@ export interface AirbyteApiPaths {
             configuration: {
               sourceType: "google-analytics-data-api";
               property_ids: string[];
+              custom_reports_array: Array<{ name: string; dimensions: string[]; metrics: string[] }>;
+              window_in_days: number;
+              lookback_window: number;
               date_ranges_start_date?: string;
             };
           };
@@ -137,6 +140,35 @@ export interface AirbyteApiPaths {
       };
     };
   };
+  "/streams": {
+    get: {
+      parameters: {
+        query: {
+          sourceId: string;
+          destinationId?: string;
+          ignoreCache?: boolean;
+        };
+      };
+      responses: {
+        200: {
+          content: {
+            "application/json": Array<{
+              streamName?: string;
+              streamnamespace?: string;
+              syncModes?: Array<"full_refresh_overwrite" | "full_refresh_overwrite_deduped" | "full_refresh_append" | "full_refresh_update" | "full_refresh_soft_delete" | "incremental_append" | "incremental_deduped_history" | "incremental_update" | "incremental_soft_delete">;
+              defaultCursorField?: string[];
+              sourceDefinedCursorField?: boolean;
+              sourceDefinedPrimaryKey?: string[][];
+              propertyFields?: string[][];
+            }>;
+          };
+        };
+        400: { content: { "application/json": unknown } };
+        403: { content: { "application/json": unknown } };
+        404: { content: { "application/json": unknown } };
+      };
+    };
+  };
   "/connections": {
     post: {
       requestBody: {
@@ -145,6 +177,11 @@ export interface AirbyteApiPaths {
             name: string;
             sourceId: string;
             destinationId: string;
+            configurations: {
+              streams: Array<{ name: string; syncMode: "incremental_append" }>;
+            };
+            namespaceDefinition: "custom_format";
+            namespaceFormat: string;
             schedule: { scheduleType: "cron"; cronExpression: string };
             nonBreakingSchemaUpdatesBehavior: "disable_connection";
             status: "active";

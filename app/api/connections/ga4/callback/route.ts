@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
   } catch {
     return connectionRedirect(request, "registration_error");
   }
-  const connection = await createAirbyteConnection(configuration.configuration, { name: oauthState.label, sourceId: source.sourceId });
+  const connection = await createAirbyteConnection(configuration.configuration, { name: oauthState.label, sourceId: source.sourceId, propertyIds: oauthState.propertyIds });
   if (connection.state !== "created") {
     await recordAuditEvent({ actorUserId: session.user.id, resourceType: "connection", resourceId: authorization.id, action: "ga4.connection_create", result: "allowed", details: { outcome: connection.state } });
     return connectionRedirect(request, "connection_error");

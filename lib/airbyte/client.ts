@@ -19,8 +19,16 @@ const jobSchema = z.object({
 });
 const jobsSchema = z.object({ data: z.array(jobSchema) });
 const oauthRedirectSchema = z.object({ redirect_url: z.url().refine((value) => new URL(value).protocol === "https:") });
-const sourceSchema = z.object({ sourceId: z.string().min(1) });
-const connectionSchema = z.object({ connectionId: z.string().min(1) });
+const sourceSchema = z.object({ sourceId: z.uuid() });
+const connectionSchema = z.object({ connectionId: z.uuid() });
+const streamPropertiesSchema = z.array(z.object({
+  streamName: z.string().min(1).optional(),
+  syncModes: z.array(z.enum(["full_refresh_overwrite", "full_refresh_overwrite_deduped", "full_refresh_append", "full_refresh_update", "full_refresh_soft_delete", "incremental_append", "incremental_deduped_history", "incremental_update", "incremental_soft_delete"])).optional(),
+}));
+
+const ga4ReportingStreamName = "mosaic_ga4_daily";
+const ga4ReportingDimensions = ["date", "sessionDefaultChannelGroup", "country", "deviceCategory"];
+const ga4ReportingMetrics = ["sessions", "totalUsers", "newUsers", "engagedSessions", "eventCount", "keyEvents", "totalRevenue"];
 
 export type AirbyteProbeResult =
   | { state: "healthy"; checkedAt: string; workspaceName: string }
@@ -242,6 +250,9 @@ export async function createGa4Source(configuration: AirbyteConfiguration, input
         configuration: {
           sourceType: "google-analytics-data-api",
           property_ids: input.propertyIds,
+          custom_reports_array: [{ name: ga4ReportingStreamName, dimensions: ga4ReportingDimensions, metrics: ga4ReportingMetrics }],
+          window_in_days: 1,
+          lookback_window: 2,
           ...(input.startDate ? { date_ranges_start_date: input.startDate } : {}),
         },
       },
@@ -255,16 +266,31 @@ export async function createGa4Source(configuration: AirbyteConfiguration, input
   }
 }
 
-export async function createAirbyteConnection(configuration: AirbyteConfiguration, input: { name: string; sourceId: string }): Promise<AirbyteConnectionResult> {
+export async function createAirbyteConnection(configuration: AirbyteConfiguration, input: { name: string; sourceId: string; propertyIds: string[] }): Promise<AirbyteConnectionResult> {
   try {
     const token = await requestAccessToken(configuration);
     if (token.state !== "authenticated") return token;
     const client = createAirbyteClient(configuration, token.accessToken);
+    const streamsResponse = await client.GET("/streams", {
+      params: { query: { sourceId: input.sourceId, destinationId: configuration.destinationId, ignoreCache: true } },
+    });
+    if (streamsResponse.response.status === 403) return { state: "authentication_failed", message: "The Airbyte application cannot discover GA4 streams." };
+    if (!streamsResponse.response.ok) return { state: "upstream_error", message: "Airbyte could not discover the GA4 reporting stream." };
+    const streams = streamPropertiesSchema.safeParse(streamsResponse.data);
+    if (!streams.success) return { state: "invalid_response", message: "Airbyte returned an invalid GA4 stream catalog." };
+    const requiredStreamNames = input.propertyIds.map((propertyId, index) => index === 0 ? ga4ReportingStreamName : `${ga4ReportingStreamName}Property${propertyId}`);
+    const discoveredStreams = new Map(streams.data.map((stream) => [stream.streamName, stream]));
+    if (requiredStreamNames.some((streamName) => !discoveredStreams.get(streamName)?.syncModes?.includes("incremental_append"))) {
+      return { state: "invalid_response", message: "The required GA4 reporting stream is unavailable or does not support incremental append." };
+    }
     const response = await client.POST("/connections", {
       body: {
         name: input.name,
         sourceId: input.sourceId,
         destinationId: configuration.destinationId,
+        configurations: { streams: requiredStreamNames.map((name) => ({ name, syncMode: "incremental_append" as const })) },
+        namespaceDefinition: "custom_format",
+        namespaceFormat: `mosaic_${input.sourceId.replaceAll("-", "")}`,
         schedule: { scheduleType: "cron", cronExpression: configuration.syncFrequencyHours === 24 ? "0 0 0 * * ?" : `0 0 */${configuration.syncFrequencyHours} * * ?` },
         nonBreakingSchemaUpdatesBehavior: "disable_connection",
         status: "active",

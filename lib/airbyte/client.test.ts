@@ -16,6 +16,8 @@ const configuration: AirbyteConfiguration = {
 };
 
 const server = setupServer();
+const ga4SourceId = "33333333-3333-4333-8333-333333333333";
+const ga4ConnectionId = "44444444-4444-4444-8444-444444444444";
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => server.resetHandlers());
@@ -136,16 +138,34 @@ describe("Airbyte GA4 provisioning", () => {
     server.use(
       http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
       http.post("http://airbyte.test/v1/sources", async ({ request }) => {
-        expect(await request.json()).toEqual({ name: "Main GA4", workspaceId: configuration.workspaceId, secretId: "opaque-secret-id", configuration: { sourceType: "google-analytics-data-api", property_ids: ["123456789"], date_ranges_start_date: "2025-01-01" } });
-        return HttpResponse.json({ sourceId: "source-id" });
+        expect(await request.json()).toEqual({ name: "Main GA4", workspaceId: configuration.workspaceId, secretId: "opaque-secret-id", configuration: { sourceType: "google-analytics-data-api", property_ids: ["123456789", "987654321"], custom_reports_array: [{ name: "mosaic_ga4_daily", dimensions: ["date", "sessionDefaultChannelGroup", "country", "deviceCategory"], metrics: ["sessions", "totalUsers", "newUsers", "engagedSessions", "eventCount", "keyEvents", "totalRevenue"] }], window_in_days: 1, lookback_window: 2, date_ranges_start_date: "2025-01-01" } });
+        return HttpResponse.json({ sourceId: ga4SourceId });
+      }),
+      http.get("http://airbyte.test/v1/streams", ({ request }) => {
+        const query = new URL(request.url).searchParams;
+        expect(query.get("sourceId")).toBe(ga4SourceId);
+        expect(query.get("destinationId")).toBe(configuration.destinationId);
+        expect(query.get("ignoreCache")).toBe("true");
+        return HttpResponse.json([
+          { streamName: "mosaic_ga4_daily", syncModes: ["incremental_append"] },
+          { streamName: "mosaic_ga4_dailyProperty987654321", syncModes: ["incremental_append"] },
+        ]);
       }),
       http.post("http://airbyte.test/v1/connections", async ({ request }) => {
-        expect(await request.json()).toEqual({ name: "Main GA4", sourceId: "source-id", destinationId: configuration.destinationId, schedule: { scheduleType: "cron", cronExpression: "0 0 */6 * * ?" }, nonBreakingSchemaUpdatesBehavior: "disable_connection", status: "active" });
-        return HttpResponse.json({ connectionId: "connection-id" });
+        expect(await request.json()).toEqual({ name: "Main GA4", sourceId: ga4SourceId, destinationId: configuration.destinationId, configurations: { streams: [{ name: "mosaic_ga4_daily", syncMode: "incremental_append" }, { name: "mosaic_ga4_dailyProperty987654321", syncMode: "incremental_append" }] }, namespaceDefinition: "custom_format", namespaceFormat: "mosaic_33333333333343338333333333333333", schedule: { scheduleType: "cron", cronExpression: "0 0 */6 * * ?" }, nonBreakingSchemaUpdatesBehavior: "disable_connection", status: "active" });
+        return HttpResponse.json({ connectionId: ga4ConnectionId });
       }),
     );
-    await expect(createGa4Source(configuration, { name: "Main GA4", secretId: "opaque-secret-id", propertyIds: ["123456789"], startDate: "2025-01-01" })).resolves.toEqual({ state: "created", sourceId: "source-id" });
-    await expect(createAirbyteConnection(configuration, { name: "Main GA4", sourceId: "source-id" })).resolves.toEqual({ state: "created", connectionId: "connection-id" });
+    await expect(createGa4Source(configuration, { name: "Main GA4", secretId: "opaque-secret-id", propertyIds: ["123456789", "987654321"], startDate: "2025-01-01" })).resolves.toEqual({ state: "created", sourceId: ga4SourceId });
+    await expect(createAirbyteConnection(configuration, { name: "Main GA4", sourceId: ga4SourceId, propertyIds: ["123456789", "987654321"] })).resolves.toEqual({ state: "created", connectionId: ga4ConnectionId });
+  });
+
+  it("refuses to create a connection when the approved GA4 stream contract is unavailable", async () => {
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.get("http://airbyte.test/v1/streams", () => HttpResponse.json([{ streamName: "website_overview", syncModes: ["incremental_append"] }])),
+    );
+    await expect(createAirbyteConnection(configuration, { name: "Main GA4", sourceId: ga4SourceId, propertyIds: ["123456789"] })).resolves.toMatchObject({ state: "invalid_response" });
   });
 
   it("rejects a non-HTTPS consent URL", async () => {
