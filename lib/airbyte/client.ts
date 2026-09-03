@@ -9,13 +9,13 @@ import type { AirbyteConfiguration } from "./config";
 const tokenSchema = z.object({ access_token: z.string().min(1) });
 const workspaceSchema = z.object({ workspaceId: z.string().min(1), name: z.string().min(1) });
 const jobSchema = z.object({
-  jobId: z.number().int().nonnegative(),
+  jobId: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   status: z.enum(["pending", "queued", "running", "incomplete", "failed", "succeeded", "cancelled"]),
   jobType: z.enum(["sync", "reset", "refresh", "clear"]),
   startTime: z.string().min(1),
   connectionId: z.string().min(1),
   lastUpdatedAt: z.string().min(1).optional(),
-  rowsSynced: z.number().int().nonnegative().optional(),
+  rowsSynced: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
 });
 const jobsSchema = z.object({ data: z.array(jobSchema) });
 const oauthRedirectSchema = z.object({ redirect_url: z.url().refine((value) => new URL(value).protocol === "https:") });
@@ -43,6 +43,21 @@ export type AirbyteLatestSyncResult =
         failureType: "unknown" | null;
       };
     }
+  | { state: "authentication_failed" | "invalid_response" | "upstream_error" | "unavailable"; message: string };
+
+export type AirbyteSyncRun = {
+  jobId: string;
+  status: "pending" | "running" | "succeeded" | "failed" | "cancelled";
+  recordsSynced: number | null;
+  startedAt: Date;
+  completedAt: Date | null;
+  durationSeconds: number | null;
+  failureType: "unknown" | null;
+};
+
+export type AirbyteRecentSyncsResult =
+  | { state: "empty" }
+  | { state: "found"; runs: AirbyteSyncRun[] }
   | { state: "authentication_failed" | "invalid_response" | "upstream_error" | "unavailable"; message: string };
 
 type AirbyteMutationFailure = { state: "authentication_failed" | "invalid_response" | "upstream_error" | "unavailable"; message: string };
@@ -129,47 +144,70 @@ function parseAirbyteDate(value: string | undefined) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export async function getLatestAirbyteSync(configuration: AirbyteConfiguration, connectionId: string): Promise<AirbyteLatestSyncResult> {
+export async function getRecentAirbyteSyncs(configuration: AirbyteConfiguration, connectionId: string, requestedLimit = 10): Promise<AirbyteRecentSyncsResult> {
   try {
+    const limit = Math.max(1, Math.min(100, Math.trunc(requestedLimit)));
     const token = await requestAccessToken(configuration);
     if (token.state !== "authenticated") return token;
 
     const client = createAirbyteClient(configuration, token.accessToken);
     const response = await client.GET("/jobs", {
-      params: { query: { connectionId, jobType: "sync", limit: 1, orderBy: "updatedAt|DESC" } },
+      params: { query: { connectionId, jobType: "sync", limit, orderBy: "updatedAt|DESC" } },
     });
     if (response.response.status === 403) return { state: "authentication_failed", message: "The Airbyte application cannot read synchronization jobs." };
     if (!response.response.ok) return { state: "upstream_error", message: "Airbyte could not read synchronization jobs." };
 
     const parsed = jobsSchema.safeParse(response.data);
     if (!parsed.success) return { state: "invalid_response", message: "Airbyte returned an unexpected job response." };
-    const job = parsed.data.data[0];
-    if (!job) return { state: "empty" };
+    if (parsed.data.data.length === 0) return { state: "empty" };
 
-    const startedAt = parseAirbyteDate(job.startTime);
-    if (job.connectionId !== connectionId || job.jobType !== "sync" || !startedAt) {
-      return { state: "invalid_response", message: "Airbyte returned a job outside the requested connection scope." };
-    }
+    const runs: AirbyteSyncRun[] = [];
+    for (const job of parsed.data.data) {
+      const startedAt = parseAirbyteDate(job.startTime);
+      if (job.connectionId !== connectionId || job.jobType !== "sync" || !startedAt) {
+        return { state: "invalid_response", message: "Airbyte returned a job outside the requested connection scope." };
+      }
 
-    const status = syncStatusMap[job.status];
-    const terminal = status === "succeeded" || status === "failed" || status === "cancelled";
-    const completedAt = terminal ? parseAirbyteDate(job.lastUpdatedAt) : null;
-    if (terminal && !completedAt) return { state: "invalid_response", message: "Airbyte returned an incomplete terminal job response." };
-
-    return {
-      state: "found",
-      snapshot: {
+      const status = syncStatusMap[job.status];
+      const terminal = status === "succeeded" || status === "failed" || status === "cancelled";
+      const completedAt = terminal ? parseAirbyteDate(job.lastUpdatedAt) : null;
+      if (terminal && !completedAt) return { state: "invalid_response", message: "Airbyte returned an incomplete terminal job response." };
+      const durationSeconds = completedAt
+        ? Math.min(2_147_483_647, Math.max(0, Math.round((completedAt.getTime() - startedAt.getTime()) / 1_000)))
+        : null;
+      runs.push({
         jobId: String(job.jobId),
         status,
         recordsSynced: job.rowsSynced ?? null,
         startedAt,
         completedAt,
+        durationSeconds,
         failureType: status === "failed" ? "unknown" : null,
-      },
-    };
+      });
+    }
+
+    return { state: "found", runs };
   } catch {
     return { state: "unavailable", message: "Mosaic could not reach Airbyte." };
   }
+}
+
+export async function getLatestAirbyteSync(configuration: AirbyteConfiguration, connectionId: string): Promise<AirbyteLatestSyncResult> {
+  const recent = await getRecentAirbyteSyncs(configuration, connectionId, 1);
+  if (recent.state !== "found") return recent;
+  const [run] = recent.runs;
+  if (!run) return { state: "empty" };
+  return {
+    state: "found",
+    snapshot: {
+      jobId: run.jobId,
+      status: run.status,
+      recordsSynced: run.recordsSynced,
+      startedAt: run.startedAt,
+      completedAt: run.completedAt,
+      failureType: run.failureType,
+    },
+  };
 }
 
 export async function initiateGa4OAuth(configuration: AirbyteConfiguration, redirectUrl: string): Promise<AirbyteOAuthResult> {

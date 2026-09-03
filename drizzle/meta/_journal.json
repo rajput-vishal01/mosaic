@@ -43,6 +43,13 @@
       "when": 1788328207863,
       "tag": "0005_ancient_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788430565482,
+      "tag": "0006_tranquil_fallen_one",
+      "breakpoints": true
     }
   ]
 }

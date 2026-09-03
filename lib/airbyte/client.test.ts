@@ -2,7 +2,7 @@ import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { createAirbyteConnection, createGa4Source, deleteAirbyteSourceAndConnection, getLatestAirbyteSync, initiateGa4OAuth, probeAirbyte } from "./client";
+import { createAirbyteConnection, createGa4Source, deleteAirbyteSourceAndConnection, getLatestAirbyteSync, getRecentAirbyteSyncs, initiateGa4OAuth, probeAirbyte } from "./client";
 import type { AirbyteConfiguration } from "./config";
 
 const configuration: AirbyteConfiguration = {
@@ -96,6 +96,27 @@ describe("Airbyte latest synchronization", () => {
     );
 
     await expect(getLatestAirbyteSync(configuration, "connection-id")).resolves.toMatchObject({ state: "invalid_response" });
+  });
+
+  it("normalizes recent runs and computes terminal durations", async () => {
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.get("http://airbyte.test/v1/jobs", ({ request }) => {
+        expect(new URL(request.url).searchParams.get("limit")).toBe("10");
+        return HttpResponse.json({ data: [
+          { jobId: 45, status: "running", jobType: "sync", startTime: "2026-09-02T09:00:00.000Z", connectionId: "connection-id", rowsSynced: 200 },
+          { jobId: 44, status: "failed", jobType: "sync", startTime: "2026-09-02T08:00:00.000Z", lastUpdatedAt: "2026-09-02T08:01:31.000Z", connectionId: "connection-id" },
+        ] });
+      }),
+    );
+
+    await expect(getRecentAirbyteSyncs(configuration, "connection-id")).resolves.toMatchObject({
+      state: "found",
+      runs: [
+        { jobId: "45", status: "running", durationSeconds: null, failureType: null },
+        { jobId: "44", status: "failed", durationSeconds: 91, failureType: "unknown" },
+      ],
+    });
   });
 });
 

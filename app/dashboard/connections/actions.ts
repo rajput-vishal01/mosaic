@@ -65,7 +65,8 @@ export async function refreshSynchronizationStatus(): Promise<SyncRefreshState> 
   revalidatePath("/dashboard/connections");
 
   if (result.unavailable > 0) return { status: "error", message: `Updated ${result.updated} connections; ${result.unavailable} could not be refreshed.` };
-  return { status: "complete", message: result.updated === 1 ? "Updated 1 connection." : `Updated ${result.updated} connections.` };
+  const runCopy = result.runsObserved === 1 ? "1 recent run" : `${result.runsObserved} recent runs`;
+  return { status: "complete", message: result.updated === 1 ? `Updated 1 connection and retained ${runCopy}.` : `Updated ${result.updated} connections and retained ${runCopy}.` };
 }
 
 export type Ga4SetupState = { status: "idle" } | { status: "error"; message: string };

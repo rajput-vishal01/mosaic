@@ -1,9 +1,9 @@
 import "server-only";
 
-import { count, eq } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { providerAuthorization, sourceAccount, syncSnapshot } from "@/lib/db/schema";
+import { providerAuthorization, sourceAccount, syncRun, syncSnapshot } from "@/lib/db/schema";
 import { deriveConnectionHealth } from "./health";
 
 export async function listConnectionSummaries() {
@@ -40,4 +40,25 @@ export async function listConnectionSummaries() {
       lastSuccessfulAt: row.lastSuccessfulAt,
     }),
   }));
+}
+
+export async function listRecentSyncRuns(limit = 50) {
+  return db
+    .select({
+      id: syncRun.id,
+      jobId: syncRun.jobId,
+      provider: providerAuthorization.provider,
+      connectionLabel: providerAuthorization.label,
+      status: syncRun.status,
+      recordsSynced: syncRun.recordsSynced,
+      startedAt: syncRun.startedAt,
+      completedAt: syncRun.completedAt,
+      durationSeconds: syncRun.durationSeconds,
+      failureType: syncRun.failureType,
+      failureSummary: syncRun.failureSummary,
+    })
+    .from(syncRun)
+    .innerJoin(providerAuthorization, eq(providerAuthorization.id, syncRun.authorizationId))
+    .orderBy(desc(syncRun.startedAt))
+    .limit(Math.max(1, Math.min(100, Math.trunc(limit))));
 }

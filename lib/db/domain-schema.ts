@@ -1,4 +1,4 @@
-import { bigint, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { member, organization, user } from "./auth-schema";
 
@@ -71,6 +71,34 @@ export const syncSnapshot = pgTable(
       .notNull(),
   },
   (table) => [index("sync_snapshot_status_updated_idx").on(table.status, table.updatedAt)],
+);
+
+export const syncRun = pgTable(
+  "sync_run",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    authorizationId: uuid("authorization_id")
+      .notNull()
+      .references(() => providerAuthorization.id, { onDelete: "cascade" }),
+    jobId: text("job_id").notNull(),
+    status: syncStatus("status").notNull(),
+    recordsSynced: bigint("records_synced", { mode: "number" }),
+    startedAt: timestamp("started_at").notNull(),
+    completedAt: timestamp("completed_at"),
+    durationSeconds: integer("duration_seconds"),
+    failureType: syncFailureType("failure_type"),
+    failureSummary: text("failure_summary"),
+    observedAt: timestamp("observed_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("sync_run_authorization_job_unique").on(table.authorizationId, table.jobId),
+    index("sync_run_authorization_started_idx").on(table.authorizationId, table.startedAt),
+    index("sync_run_status_started_idx").on(table.status, table.startedAt),
+  ],
 );
 
 export const connectorOauthState = pgTable(
