@@ -3,8 +3,8 @@
 ## First run
 
 1. Copy `.env.example` to `.env.local` and replace `BETTER_AUTH_SECRET` with a random secret.
-2. Start PostgreSQL and Mailpit with `docker compose -f compose.dev.yml up -d`.
-3. Apply migrations with `npm run db:migrate`.
+2. Start the application PostgreSQL database, warehouse PostgreSQL database, and Mailpit with `docker compose -f compose.dev.yml up -d`.
+3. Apply application migrations with `npm run db:migrate`. When working on analytics data, also set `WAREHOUSE_ADMIN_DATABASE_URL`, run `npm run warehouse:migrate`, apply the Superset reader role, and run `npm run warehouse:verify` as described in `warehouse/README.md`.
 4. Create the first operator:
 
    ```powershell
@@ -27,11 +27,11 @@ See [Phase 3 connector foundation](./PHASE-3-CONNECTOR-FOUNDATION.md) before pro
 
 ## Verification
 
-Run `npm run lint`, `npm test`, `npm run typecheck`, and `npm run build` before pushing a feature slice. Development PostgreSQL listens on port `5436` to avoid common local collisions.
+Run `npm run lint`, `npm test`, `npm run typecheck`, and `npm run build` before pushing a feature slice. The application database listens on port `5436`; the isolated warehouse listens on `5437`.
 
 The identity, tenant, and account-grant browser journeys also require PostgreSQL and Mailpit from the development Compose file. Install Chromium once with `npx playwright install chromium`, then run `npm run test:e2e`. The tests start Mosaic on port `3100`, create isolated timestamped records, follow real invitation and password-reset emails through Mailpit, and verify platform, agency-admin, client, cross-agency, and grant-revocation boundaries.
 
-GitHub Actions repeats migrations, superadmin bootstrap, static checks, the production build, and the browser journey against clean PostgreSQL and Mailpit services on every push and pull request.
+GitHub Actions repeats application and warehouse migrations, warehouse permission/filter verification, superadmin bootstrap, static checks, the production build, and the browser journey against clean PostgreSQL and Mailpit services on every push and pull request.
 
 ## Schema changes
 

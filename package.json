@@ -13,6 +13,9 @@
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "warehouse:generate": "drizzle-kit generate --config warehouse/drizzle.config.ts",
+    "warehouse:migrate": "drizzle-kit migrate --config warehouse/drizzle.config.ts",
+    "warehouse:verify": "tsx warehouse/verify.ts",
     "auth:create-superadmin": "auth create-admin --config lib/auth/config.ts --role superadmin"
   },
   "dependencies": {

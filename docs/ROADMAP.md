@@ -84,7 +84,7 @@ This roadmap follows GSD's vertical-MVP approach. Each phase ends in observable 
 
 ## Phase 3: GA4 end-to-end proof
 
-**Status:** In progress — scheduled Airbyte ingestion boundaries, replay-safe GA4 provisioning, grant-resolved Superset embedding, per-client freshness, and safe revocation delivered behind infrastructure readiness gates (2026-09-03)
+**Status:** In progress — scheduled Airbyte ingestion, replay-safe GA4 provisioning, isolated warehouse/reporting schemas, grant-resolved Superset embedding, per-client freshness, and safe revocation delivered behind infrastructure readiness gates (2026-09-03)
 
 **Goal:** Deliver the smallest real vertical slice from operator authorization to isolated client analytics.
 
