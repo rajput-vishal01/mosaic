@@ -64,7 +64,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${copy.tone}`}>{copy.label}</span>
             </div>
             <p className="mt-5 text-sm leading-6 text-slate-600">{copy.description}</p>
-            {airbyte.state === "ready" && <p className="mt-2 text-xs text-slate-500">Service origin: {airbyte.apiUrl}</p>}
+            {airbyte.state === "ready" && <><p className="mt-2 text-xs text-slate-500">Service origin: {airbyte.apiUrl}</p><p className="mt-1 text-xs text-slate-500">New connections sync every {airbyte.syncFrequencyHours} {airbyte.syncFrequencyHours === 1 ? "hour" : "hours"} on an Airbyte-owned UTC schedule.</p></>}
             {(airbyte.state === "unconfigured" || airbyte.state === "incomplete") && <p className="mt-2 text-xs leading-5 text-slate-500">Missing: {airbyte.missing.join(", ")}</p>}
             {airbyte.state === "invalid" && <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-amber-700">{airbyte.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}
             <div className="mt-5"><AirbyteTestForm enabled={airbyte.state === "ready"} /></div>

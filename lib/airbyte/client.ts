@@ -223,7 +223,14 @@ export async function createAirbyteConnection(configuration: AirbyteConfiguratio
     if (token.state !== "authenticated") return token;
     const client = createAirbyteClient(configuration, token.accessToken);
     const response = await client.POST("/connections", {
-      body: { name: input.name, sourceId: input.sourceId, destinationId: configuration.destinationId },
+      body: {
+        name: input.name,
+        sourceId: input.sourceId,
+        destinationId: configuration.destinationId,
+        schedule: { scheduleType: "cron", cronExpression: configuration.syncFrequencyHours === 24 ? "0 0 0 * * ?" : `0 0 */${configuration.syncFrequencyHours} * * ?` },
+        nonBreakingSchemaUpdatesBehavior: "disable_connection",
+        status: "active",
+      },
     });
     if (response.response.status === 403) return { state: "authentication_failed", message: "The Airbyte application cannot create warehouse connections." };
     if (!response.response.ok) return { state: "upstream_error", message: "Airbyte could not connect the GA4 source to the warehouse." };

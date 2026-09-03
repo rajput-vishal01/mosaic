@@ -21,6 +21,7 @@ Phase 3 starts with a deliberately narrow control-plane boundary. Mosaic can now
 - Client, agency-admin, and superadmin dashboard-route boundaries are explicit. The embed stays disabled until the deployment confirms Superset embedded mode and a non-empty Mosaic allowed-domain list.
 - Client freshness is derived from the current granted accounts rather than a global connection status. The dashboard exposes the oldest relevant successful timestamp and distinguishes current, refreshing, partial, stale, reconnect-required, and unavailable data while retaining the last successful view after failures.
 - A superadmin can disconnect a live GA4 authorization from Mosaic. The adapter deletes the Airbyte connection before its credential-bearing source, accepts already-deleted resources for retry safety, preserves historical warehouse rows, and immediately excludes the revoked authorization from future dashboard scopes. Partial cleanup is surfaced as an operator error instead of being presented as a successful revocation.
+- New Airbyte connections no longer inherit the API's manual-sync default. Mosaic creates an active UTC cron schedule at a validated 1, 2, 3, 4, 6, 8, 12, or 24-hour interval and asks Airbyte to disable the connection on non-breaking schema changes rather than silently drifting the reporting contract.
 
 The checked-in API surface is intentionally narrow. Once a real self-managed Airbyte version is deployed, generate the complete client from that instance's OpenAPI schema and review the generated diff before adding OAuth mutations.
 
@@ -34,6 +35,7 @@ The checked-in API surface is intentionally narrow. Once a real self-managed Air
 | `AIRBYTE_WORKSPACE_ID` | Dedicated Mosaic workspace UUID |
 | `AIRBYTE_DESTINATION_ID` | Warehouse destination UUID used for connector creation |
 | `AIRBYTE_REQUEST_TIMEOUT_MS` | Server-to-server request deadline; defaults to 5000 ms |
+| `AIRBYTE_SYNC_FREQUENCY_HOURS` | Server-owned ingestion cadence; supported values are 1, 2, 3, 4, 6, 8, 12, and 24; defaults to 6 |
 | `AIRBYTE_GA4_OAUTH_READY` | Explicit acknowledgement that GA4 workspace OAuth credentials are configured in Airbyte |
 | `SUPERSET_URL` | Superset origin used by the server adapter and embedded SDK |
 | `SUPERSET_SERVICE_USERNAME` | Dedicated Superset service account username |

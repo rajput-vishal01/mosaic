@@ -9,6 +9,7 @@ const configurationSchema = z.object({
   workspaceId: z.uuid(),
   destinationId: z.uuid(),
   requestTimeoutMs: z.coerce.number().int().min(1_000).max(30_000).default(5_000),
+  syncFrequencyHours: z.coerce.number().pipe(z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(6), z.literal(8), z.literal(12), z.literal(24)])).default(6),
 });
 
 export type AirbyteConfiguration = z.infer<typeof configurationSchema>;
@@ -43,6 +44,7 @@ export function getAirbyteConfiguration(environment: Environment = process.env):
     workspaceId: environment.AIRBYTE_WORKSPACE_ID,
     destinationId: environment.AIRBYTE_DESTINATION_ID,
     requestTimeoutMs: environment.AIRBYTE_REQUEST_TIMEOUT_MS,
+    syncFrequencyHours: environment.AIRBYTE_SYNC_FREQUENCY_HOURS,
   });
 
   if (!parsed.success) {
@@ -63,6 +65,7 @@ export function getSafeAirbyteConfigurationStatus(environment: Environment = pro
       apiUrl: new URL(status.configuration.apiUrl).origin,
       workspaceConfigured: true,
       destinationConfigured: true,
+      syncFrequencyHours: status.configuration.syncFrequencyHours,
     } as const;
   }
   return status;

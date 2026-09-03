@@ -145,6 +145,9 @@ export interface AirbyteApiPaths {
             name: string;
             sourceId: string;
             destinationId: string;
+            schedule: { scheduleType: "cron"; cronExpression: string };
+            nonBreakingSchemaUpdatesBehavior: "disable_connection";
+            status: "active";
           };
         };
       };

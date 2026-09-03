@@ -29,8 +29,15 @@ describe("Airbyte configuration", () => {
         workspaceId: validEnvironment.AIRBYTE_WORKSPACE_ID,
         destinationId: validEnvironment.AIRBYTE_DESTINATION_ID,
         requestTimeoutMs: 5_000,
+        syncFrequencyHours: 6,
       },
     });
+  });
+
+  it("accepts only supported server-owned synchronization intervals", () => {
+    expect(getAirbyteConfiguration({ ...validEnvironment, AIRBYTE_SYNC_FREQUENCY_HOURS: "12" })).toMatchObject({ state: "ready", configuration: { syncFrequencyHours: 12 } });
+    expect(getAirbyteConfiguration({ ...validEnvironment, AIRBYTE_SYNC_FREQUENCY_HOURS: "0" }).state).toBe("invalid");
+    expect(getAirbyteConfiguration({ ...validEnvironment, AIRBYTE_SYNC_FREQUENCY_HOURS: "5" }).state).toBe("invalid");
   });
 
   it("never exposes credentials through the safe status", () => {

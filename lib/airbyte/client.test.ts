@@ -12,6 +12,7 @@ const configuration: AirbyteConfiguration = {
   workspaceId: "11111111-1111-4111-8111-111111111111",
   destinationId: "22222222-2222-4222-8222-222222222222",
   requestTimeoutMs: 2_000,
+  syncFrequencyHours: 6,
 };
 
 const server = setupServer();
@@ -118,7 +119,7 @@ describe("Airbyte GA4 provisioning", () => {
         return HttpResponse.json({ sourceId: "source-id" });
       }),
       http.post("http://airbyte.test/v1/connections", async ({ request }) => {
-        expect(await request.json()).toEqual({ name: "Main GA4", sourceId: "source-id", destinationId: configuration.destinationId });
+        expect(await request.json()).toEqual({ name: "Main GA4", sourceId: "source-id", destinationId: configuration.destinationId, schedule: { scheduleType: "cron", cronExpression: "0 0 */6 * * ?" }, nonBreakingSchemaUpdatesBehavior: "disable_connection", status: "active" });
         return HttpResponse.json({ connectionId: "connection-id" });
       }),
     );
