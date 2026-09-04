@@ -228,4 +228,18 @@ describe("Airbyte GA4 provisioning", () => {
     );
     await expect(deleteAirbyteSourceAndConnection(configuration, { sourceId: "source-id", connectionId: "connection-id" })).resolves.toMatchObject({ state: "partial" });
   });
+
+  it("deletes an incomplete source without inventing a connection deletion", async () => {
+    let sourceDeletes = 0;
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.delete("http://airbyte.test/v1/sources/source-id", () => {
+        sourceDeletes += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    await expect(deleteAirbyteSourceAndConnection(configuration, { sourceId: "source-id" })).resolves.toEqual({ state: "deleted" });
+    expect(sourceDeletes).toBe(1);
+  });
 });

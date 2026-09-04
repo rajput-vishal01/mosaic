@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, ne } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { connectorOauthState, providerAuthorization, sourceAccount, syncRun, syncSnapshot } from "@/lib/db/schema";
@@ -52,20 +52,29 @@ export async function claimGa4OauthState(id: string, actorUserId: string) {
   return claimed ?? null;
 }
 
-export async function registerGa4Source(input: { label: string; sourceId: string }) {
-  const [authorization] = await db
-    .insert(providerAuthorization)
-    .values({
-      provider: "ga4",
-      label: input.label,
-      status: "error",
-      credentialStatus: "healthy",
-      airbyteSourceId: input.sourceId,
-      credentialsCheckedAt: new Date(),
-    })
-    .returning({ id: providerAuthorization.id });
-  if (!authorization) throw new Error("The GA4 authorization could not be registered.");
-  return authorization;
+export async function registerGa4Source(input: { label: string; sourceId: string; propertyIds: string[] }) {
+  return db.transaction(async (transaction) => {
+    const [authorization] = await transaction
+      .insert(providerAuthorization)
+      .values({
+        provider: "ga4",
+        label: input.label,
+        status: "error",
+        credentialStatus: "healthy",
+        airbyteSourceId: input.sourceId,
+        credentialsCheckedAt: new Date(),
+      })
+      .returning({ id: providerAuthorization.id });
+    if (!authorization) throw new Error("The GA4 authorization could not be registered.");
+
+    await transaction.insert(sourceAccount).values(input.propertyIds.map((propertyId) => ({
+      authorizationId: authorization.id,
+      externalAccountId: propertyId,
+      name: `GA4 property ${propertyId}`,
+      metadata: { propertyId, discovery: "operator_supplied" },
+    })));
+    return authorization;
+  });
 }
 
 export async function completeGa4Connection(input: { authorizationId: string; connectionId: string; propertyIds: string[] }) {
@@ -141,6 +150,50 @@ export async function getActiveGa4Connection(authorizationId: string) {
     .where(and(eq(providerAuthorization.id, authorizationId), eq(providerAuthorization.provider, "ga4"), eq(providerAuthorization.status, "active")))
     .limit(1);
   return authorization?.sourceId && authorization.connectionId ? { ...authorization, sourceId: authorization.sourceId, connectionId: authorization.connectionId } : null;
+}
+
+export async function getRemovableGa4Source(authorizationId: string) {
+  const [authorization] = await db
+    .select({
+      id: providerAuthorization.id,
+      label: providerAuthorization.label,
+      sourceId: providerAuthorization.airbyteSourceId,
+      connectionId: providerAuthorization.airbyteConnectionId,
+      status: providerAuthorization.status,
+    })
+    .from(providerAuthorization)
+    .where(and(
+      eq(providerAuthorization.id, authorizationId),
+      eq(providerAuthorization.provider, "ga4"),
+      ne(providerAuthorization.status, "revoked"),
+    ))
+    .limit(1);
+  return authorization?.sourceId ? { ...authorization, sourceId: authorization.sourceId } : null;
+}
+
+export async function getRecoverableGa4Source(authorizationId: string) {
+  const [authorization] = await db
+    .select({
+      id: providerAuthorization.id,
+      label: providerAuthorization.label,
+      sourceId: providerAuthorization.airbyteSourceId,
+    })
+    .from(providerAuthorization)
+    .where(and(
+      eq(providerAuthorization.id, authorizationId),
+      eq(providerAuthorization.provider, "ga4"),
+      eq(providerAuthorization.status, "error"),
+      isNull(providerAuthorization.airbyteConnectionId),
+    ))
+    .limit(1);
+  if (!authorization?.sourceId) return null;
+
+  const accounts = await db
+    .select({ propertyId: sourceAccount.externalAccountId })
+    .from(sourceAccount)
+    .where(eq(sourceAccount.authorizationId, authorization.id));
+  if (accounts.length === 0) return null;
+  return { ...authorization, sourceId: authorization.sourceId, propertyIds: accounts.map((account) => account.propertyId) };
 }
 
 export async function recordGa4RevocationResult(authorizationId: string, state: "deleted" | "partial") {

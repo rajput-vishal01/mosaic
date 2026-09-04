@@ -342,18 +342,22 @@ export async function createAirbyteConnection(configuration: AirbyteConfiguratio
   }
 }
 
-export async function deleteAirbyteSourceAndConnection(configuration: AirbyteConfiguration, input: { sourceId: string; connectionId: string }): Promise<AirbyteDeleteResult> {
+export async function deleteAirbyteSourceAndConnection(configuration: AirbyteConfiguration, input: { sourceId: string; connectionId?: string | null }): Promise<AirbyteDeleteResult> {
   try {
     const token = await requestAccessToken(configuration);
     if (token.state !== "authenticated") return token;
     const client = createAirbyteClient(configuration, token.accessToken);
-    const connection = await client.DELETE("/connections/{connectionId}", { params: { path: { connectionId: input.connectionId } } });
-    if (connection.response.status === 403) return { state: "authentication_failed", message: "The Airbyte application cannot delete warehouse connections." };
-    if (!connection.response.ok && connection.response.status !== 404) return { state: "upstream_error", message: "Airbyte could not delete the warehouse connection." };
+    if (input.connectionId) {
+      const connection = await client.DELETE("/connections/{connectionId}", { params: { path: { connectionId: input.connectionId } } });
+      if (connection.response.status === 403) return { state: "authentication_failed", message: "The Airbyte application cannot delete warehouse connections." };
+      if (!connection.response.ok && connection.response.status !== 404) return { state: "upstream_error", message: "Airbyte could not delete the warehouse connection." };
+    }
 
     const source = await client.DELETE("/sources/{sourceId}", { params: { path: { sourceId: input.sourceId } } });
     if (source.response.status === 204 || source.response.status === 404) return { state: "deleted" };
-    return { state: "partial", message: "The warehouse connection was removed, but the Airbyte source still needs operator cleanup." };
+    if (input.connectionId) return { state: "partial", message: "The warehouse connection was removed, but the Airbyte source still needs operator cleanup." };
+    if (source.response.status === 403) return { state: "authentication_failed", message: "The Airbyte application cannot delete this source." };
+    return { state: "upstream_error", message: "Airbyte could not delete the incomplete source." };
   } catch {
     return { state: "unavailable", message: "Mosaic could not reach Airbyte." };
   }

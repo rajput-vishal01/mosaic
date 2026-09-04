@@ -6,10 +6,10 @@ import { z } from "zod";
 
 import { recordAuditEvent } from "@/features/audit/commands";
 import { refreshLinkedAirbyteSnapshots } from "@/features/connections/commands";
-import { createGa4OauthState, discardGa4OauthState, getActiveGa4Connection, recordGa4RevocationResult, recordTriggeredGa4Sync } from "@/features/connections/ga4";
+import { completeGa4Connection, createGa4OauthState, discardGa4OauthState, getActiveGa4Connection, getRecoverableGa4Source, getRemovableGa4Source, recordGa4RevocationResult, recordTriggeredGa4Sync } from "@/features/connections/ga4";
 import { ga4SetupSchema } from "@/features/connections/ga4-schema";
 import { publishCanonicalWarehouseScopes } from "@/features/connections/warehouse";
-import { deleteAirbyteSourceAndConnection, initiateGa4OAuth, probeAirbyte, triggerAirbyteSync, type AirbyteProbeResult } from "@/lib/airbyte/client";
+import { createAirbyteConnection, deleteAirbyteSourceAndConnection, initiateGa4OAuth, probeAirbyte, triggerAirbyteSync, type AirbyteProbeResult } from "@/lib/airbyte/client";
 import { getAirbyteConfiguration, isGa4OauthConfigured } from "@/lib/airbyte/config";
 import { requireSuperadmin } from "@/lib/auth/session";
 import { getWarehouseScopeConfiguration } from "@/lib/warehouse/config";
@@ -108,6 +108,54 @@ export async function startGa4Authorization(_state: Ga4SetupState, formData: For
 export type RevokeConnectionState = { status: "idle" } | { status: "error" | "complete"; message: string };
 
 export type TriggerSyncState = { status: "idle" } | { status: "error" | "complete"; message: string };
+export type RecoverConnectionState = { status: "idle" } | { status: "error" | "complete"; message: string };
+
+export async function recoverGa4Connection(_state: RecoverConnectionState, formData: FormData): Promise<RecoverConnectionState> {
+  const session = await requireSuperadmin();
+  const parsed = z.uuid().safeParse(formData.get("authorizationId"));
+  if (!parsed.success) return { status: "error", message: "The selected connection is invalid." };
+
+  const authorization = await getRecoverableGa4Source(parsed.data);
+  if (!authorization) return { status: "error", message: "This GA4 source is no longer recoverable." };
+  const configuration = getAirbyteConfiguration();
+  if (configuration.state !== "ready") return { status: "error", message: "Complete the Airbyte configuration before retrying setup." };
+
+  const connection = await createAirbyteConnection(configuration.configuration, {
+    name: authorization.label,
+    sourceId: authorization.sourceId,
+    propertyIds: authorization.propertyIds,
+  });
+  if (connection.state !== "created") {
+    await recordAuditEvent({ actorUserId: session.user.id, resourceType: "connection", resourceId: authorization.id, action: "ga4.connection_recover", result: "denied", details: { outcome: connection.state } });
+    return { status: "error", message: connection.message };
+  }
+
+  await completeGa4Connection({ authorizationId: authorization.id, connectionId: connection.connectionId, propertyIds: authorization.propertyIds });
+  const warehouse = getWarehouseScopeConfiguration();
+  const scopeResult = warehouse.state === "ready"
+    ? await publishCanonicalWarehouseScopes(warehouse.configuration)
+    : { state: "unavailable" as const };
+  if (scopeResult.state !== "published") {
+    await recordAuditEvent({ actorUserId: session.user.id, resourceType: "connection", resourceId: authorization.id, action: "ga4.connection_recover", result: "denied", details: { outcome: "warehouse_unavailable" } });
+    revalidatePath("/dashboard/connections");
+    return { status: "error", message: "The connection was recovered, but warehouse account scopes still need publishing." };
+  }
+
+  const initialSync = await triggerAirbyteSync(configuration.configuration, connection.connectionId);
+  if (initialSync.state === "started") {
+    try {
+      await recordTriggeredGa4Sync({ authorizationId: authorization.id, jobId: initialSync.jobId, status: initialSync.status });
+    } catch {
+      return { status: "error", message: "The connection was recovered and Airbyte accepted its sync, but Mosaic could not record the job yet." };
+    }
+  }
+  const accepted = initialSync.state === "started" || initialSync.state === "already_running";
+  await recordAuditEvent({ actorUserId: session.user.id, resourceType: "connection", resourceId: authorization.id, action: "ga4.connection_recover", result: accepted ? "allowed" : "denied", details: { outcome: initialSync.state } });
+  revalidatePath("/dashboard/connections");
+  return accepted
+    ? { status: "complete", message: `${authorization.label} was recovered and is ready to synchronize.` }
+    : { status: "error", message: "The connection was recovered and remains scheduled, but its first sync could not be started immediately." };
+}
 
 export async function triggerGa4Synchronization(_state: TriggerSyncState, formData: FormData): Promise<TriggerSyncState> {
   const session = await requireSuperadmin();
@@ -148,12 +196,13 @@ export async function revokeGa4Connection(_state: RevokeConnectionState, formDat
   const session = await requireSuperadmin();
   const parsed = z.uuid().safeParse(formData.get("authorizationId"));
   if (!parsed.success) return { status: "error", message: "The selected connection is invalid." };
-  const authorization = await getActiveGa4Connection(parsed.data);
-  if (!authorization) return { status: "error", message: "The GA4 connection is no longer active." };
+  const authorization = await getRemovableGa4Source(parsed.data);
+  if (!authorization) return { status: "error", message: "The GA4 source is no longer available." };
   const configuration = getAirbyteConfiguration();
   if (configuration.state !== "ready") return { status: "error", message: "Airbyte must be configured before disconnecting this source." };
 
   const result = await deleteAirbyteSourceAndConnection(configuration.configuration, { sourceId: authorization.sourceId, connectionId: authorization.connectionId });
+  const incomplete = authorization.status === "error" && !authorization.connectionId;
   if (result.state === "deleted" || result.state === "partial") await recordGa4RevocationResult(authorization.id, result.state);
   const warehouseConfiguration = getWarehouseScopeConfiguration();
   const scopeResult = (result.state === "deleted" || result.state === "partial") && warehouseConfiguration.state === "ready"
@@ -173,7 +222,7 @@ export async function revokeGa4Connection(_state: RevokeConnectionState, formDat
 
   return result.state === "deleted"
     ? scopeResult?.state === "published"
-      ? { status: "complete", message: `${authorization.label} was disconnected and its warehouse scopes were deactivated.` }
+      ? { status: "complete", message: incomplete ? `${authorization.label}'s incomplete source was removed and its local record was revoked.` : `${authorization.label} was disconnected and its warehouse scopes were deactivated.` }
       : { status: "error", message: `${authorization.label} was disconnected, but warehouse scope deactivation needs a retry.` }
     : { status: "error", message: result.message };
 }

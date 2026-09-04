@@ -4,7 +4,7 @@ import { z } from "zod";
 import { recordAuditEvent } from "@/features/audit/commands";
 import { claimGa4OauthState, completeGa4Connection, recordTriggeredGa4Sync, registerGa4Source } from "@/features/connections/ga4";
 import { publishCanonicalWarehouseScopes } from "@/features/connections/warehouse";
-import { createAirbyteConnection, createGa4Source, triggerAirbyteSync } from "@/lib/airbyte/client";
+import { createAirbyteConnection, createGa4Source, deleteAirbyteSourceAndConnection, triggerAirbyteSync } from "@/lib/airbyte/client";
 import { getAirbyteConfiguration } from "@/lib/airbyte/config";
 import { isSuperadmin } from "@/lib/auth/roles";
 import { auth } from "@/lib/auth/server";
@@ -49,9 +49,11 @@ export async function GET(request: NextRequest) {
 
   let authorization: { id: string };
   try {
-    authorization = await registerGa4Source({ label: oauthState.label, sourceId: source.sourceId });
+    authorization = await registerGa4Source({ label: oauthState.label, sourceId: source.sourceId, propertyIds: oauthState.propertyIds });
   } catch {
-    return connectionRedirect(request, "registration_error");
+    const cleanup = await deleteAirbyteSourceAndConnection(configuration.configuration, { sourceId: source.sourceId });
+    await recordAuditEvent({ actorUserId: session.user.id, resourceType: "connection", resourceId: oauthState.id, action: "ga4.registration_cleanup", result: cleanup.state === "deleted" ? "allowed" : "denied", details: { outcome: cleanup.state } }).catch(() => undefined);
+    return connectionRedirect(request, cleanup.state === "deleted" ? "registration_error" : "source_cleanup_error");
   }
   const connection = await createAirbyteConnection(configuration.configuration, { name: oauthState.label, sourceId: source.sourceId, propertyIds: oauthState.propertyIds });
   if (connection.state !== "created") {
