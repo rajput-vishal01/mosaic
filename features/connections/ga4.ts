@@ -3,7 +3,7 @@ import "server-only";
 import { and, eq, gt, isNull } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { connectorOauthState, providerAuthorization, sourceAccount } from "@/lib/db/schema";
+import { connectorOauthState, providerAuthorization, sourceAccount, syncRun, syncSnapshot } from "@/lib/db/schema";
 
 export async function createGa4OauthState(input: { actorUserId: string; label: string; propertyIds: string[]; startDate?: string }) {
   const [existing] = await db
@@ -85,6 +85,47 @@ export async function completeGa4Connection(input: { authorizationId: string; co
         })
         .onConflictDoNothing({ target: [sourceAccount.authorizationId, sourceAccount.externalAccountId] });
     }
+  });
+}
+
+export async function recordTriggeredGa4Sync(input: {
+  authorizationId: string;
+  jobId: string;
+  status: "pending" | "running";
+  triggeredAt?: Date;
+}) {
+  const triggeredAt = input.triggeredAt ?? new Date();
+  await db.transaction(async (transaction) => {
+    await transaction
+      .insert(syncRun)
+      .values({
+        authorizationId: input.authorizationId,
+        jobId: input.jobId,
+        status: input.status,
+        startedAt: triggeredAt,
+      })
+      .onConflictDoNothing({ target: [syncRun.authorizationId, syncRun.jobId] });
+
+    await transaction
+      .insert(syncSnapshot)
+      .values({
+        authorizationId: input.authorizationId,
+        jobId: input.jobId,
+        status: input.status,
+        startedAt: triggeredAt,
+      })
+      .onConflictDoUpdate({
+        target: syncSnapshot.authorizationId,
+        set: {
+          jobId: input.jobId,
+          status: input.status,
+          recordsSynced: null,
+          startedAt: triggeredAt,
+          completedAt: null,
+          failureType: null,
+          updatedAt: new Date(),
+        },
+      });
   });
 }
 

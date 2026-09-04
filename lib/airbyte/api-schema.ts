@@ -85,6 +85,30 @@ export interface AirbyteApiPaths {
         403: { content: { "application/json": unknown } };
       };
     };
+    post: {
+      requestBody: {
+        content: {
+          "application/json": {
+            connectionId: string;
+            jobType: "sync";
+          };
+        };
+      };
+      responses: {
+        200: {
+          content: {
+            "application/json": {
+              jobId: number;
+              status: "pending" | "queued" | "running";
+              jobType: "sync";
+            };
+          };
+        };
+        400: { content: { "application/json": unknown } };
+        403: { content: { "application/json": unknown } };
+        409: { content: { "application/json": unknown } };
+      };
+    };
   };
   "/sources/initiateOAuth": {
     post: {

@@ -18,6 +18,11 @@ const jobSchema = z.object({
   rowsSynced: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
 });
 const jobsSchema = z.object({ data: z.array(jobSchema) });
+const createdJobSchema = z.object({
+  jobId: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  status: z.enum(["pending", "queued", "running"]),
+  jobType: z.literal("sync"),
+});
 const oauthRedirectSchema = z.object({ redirect_url: z.url().refine((value) => new URL(value).protocol === "https:") });
 const sourceSchema = z.object({ sourceId: z.uuid() });
 const connectionSchema = z.object({ connectionId: z.uuid() });
@@ -76,6 +81,10 @@ type AirbyteMutationFailure = { state: "authentication_failed" | "invalid_respon
 export type AirbyteOAuthResult = { state: "ready"; consentUrl: string } | AirbyteMutationFailure;
 export type AirbyteSourceResult = { state: "created"; sourceId: string } | AirbyteMutationFailure;
 export type AirbyteConnectionResult = { state: "created"; connectionId: string } | AirbyteMutationFailure;
+export type AirbyteSyncTriggerResult =
+  | { state: "started"; jobId: string; status: "pending" | "running" }
+  | { state: "already_running"; message: string }
+  | AirbyteMutationFailure;
 export type AirbyteDeleteResult =
   | { state: "deleted" }
   | { state: "partial"; message: string }
@@ -220,6 +229,29 @@ export async function getLatestAirbyteSync(configuration: AirbyteConfiguration, 
       failureType: run.failureType,
     },
   };
+}
+
+export async function triggerAirbyteSync(configuration: AirbyteConfiguration, connectionId: string): Promise<AirbyteSyncTriggerResult> {
+  try {
+    const token = await requestAccessToken(configuration);
+    if (token.state !== "authenticated") return token;
+
+    const client = createAirbyteClient(configuration, token.accessToken);
+    const response = await client.POST("/jobs", { body: { connectionId, jobType: "sync" } });
+    if (response.response.status === 403) return { state: "authentication_failed", message: "The Airbyte application cannot start synchronization jobs." };
+    if (response.response.status === 409) return { state: "already_running", message: "A synchronization job is already active for this connection." };
+    if (!response.response.ok) return { state: "upstream_error", message: "Airbyte could not start the synchronization job." };
+
+    const parsed = createdJobSchema.safeParse(response.data);
+    if (!parsed.success) return { state: "invalid_response", message: "Airbyte returned an unexpected job response." };
+    return {
+      state: "started",
+      jobId: String(parsed.data.jobId),
+      status: parsed.data.status === "queued" ? "pending" : parsed.data.status,
+    };
+  } catch {
+    return { state: "unavailable", message: "Mosaic could not reach Airbyte." };
+  }
 }
 
 export async function initiateGa4OAuth(configuration: AirbyteConfiguration, redirectUrl: string): Promise<AirbyteOAuthResult> {

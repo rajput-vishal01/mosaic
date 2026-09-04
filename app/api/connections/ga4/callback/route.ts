@@ -2,9 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { recordAuditEvent } from "@/features/audit/commands";
-import { claimGa4OauthState, completeGa4Connection, registerGa4Source } from "@/features/connections/ga4";
+import { claimGa4OauthState, completeGa4Connection, recordTriggeredGa4Sync, registerGa4Source } from "@/features/connections/ga4";
 import { publishCanonicalWarehouseScopes } from "@/features/connections/warehouse";
-import { createAirbyteConnection, createGa4Source } from "@/lib/airbyte/client";
+import { createAirbyteConnection, createGa4Source, triggerAirbyteSync } from "@/lib/airbyte/client";
 import { getAirbyteConfiguration } from "@/lib/airbyte/config";
 import { isSuperadmin } from "@/lib/auth/roles";
 import { auth } from "@/lib/auth/server";
@@ -66,5 +66,27 @@ export async function GET(request: NextRequest) {
     : { state: "unavailable" as const };
   await recordAuditEvent({ actorUserId: session.user.id, resourceType: "connection", resourceId: authorization.id, action: "ga4.connect", result: scopeResult.state === "published" ? "allowed" : "denied", details: { propertyCount: oauthState.propertyIds.length, warehouseOutcome: scopeResult.state } });
   if (scopeResult.state !== "published") return connectionRedirect(request, "warehouse_error");
+
+  const initialSync = await triggerAirbyteSync(configuration.configuration, connection.connectionId);
+  if (initialSync.state === "started") {
+    try {
+      await recordTriggeredGa4Sync({
+        authorizationId: authorization.id,
+        jobId: initialSync.jobId,
+        status: initialSync.status,
+      });
+    } catch {
+      return connectionRedirect(request, "sync_tracking_error");
+    }
+  }
+  await recordAuditEvent({
+    actorUserId: session.user.id,
+    resourceType: "connection",
+    resourceId: authorization.id,
+    action: "ga4.initial_sync",
+    result: initialSync.state === "started" || initialSync.state === "already_running" ? "allowed" : "denied",
+    details: { outcome: initialSync.state },
+  });
+  if (initialSync.state !== "started" && initialSync.state !== "already_running") return connectionRedirect(request, "sync_start_error");
   return connectionRedirect(request, "connected");
 }

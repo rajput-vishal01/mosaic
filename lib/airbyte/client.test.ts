@@ -2,7 +2,7 @@ import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { createAirbyteConnection, createGa4Source, deleteAirbyteSourceAndConnection, getAirbyteSourcePrefix, getLatestAirbyteSync, getRecentAirbyteSyncs, initiateGa4OAuth, probeAirbyte } from "./client";
+import { createAirbyteConnection, createGa4Source, deleteAirbyteSourceAndConnection, getAirbyteSourcePrefix, getLatestAirbyteSync, getRecentAirbyteSyncs, initiateGa4OAuth, probeAirbyte, triggerAirbyteSync } from "./client";
 import type { AirbyteConfiguration } from "./config";
 
 const configuration: AirbyteConfiguration = {
@@ -164,6 +164,27 @@ describe("Airbyte GA4 provisioning", () => {
     );
     await expect(createGa4Source(configuration, { name: "Main GA4", secretId: "opaque-secret-id", propertyIds: ["123456789", "987654321"], startDate: "2025-01-01" })).resolves.toEqual({ state: "created", sourceId: ga4SourceId });
     await expect(createAirbyteConnection(configuration, { name: "Main GA4", sourceId: ga4SourceId, propertyIds: ["123456789", "987654321"] })).resolves.toEqual({ state: "created", connectionId: ga4ConnectionId });
+  });
+
+  it("starts an initial sync and normalizes a queued job", async () => {
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.post("http://airbyte.test/v1/jobs", async ({ request }) => {
+        expect(await request.json()).toEqual({ connectionId: ga4ConnectionId, jobType: "sync" });
+        return HttpResponse.json({ jobId: 51, status: "queued", jobType: "sync" });
+      }),
+    );
+
+    await expect(triggerAirbyteSync(configuration, ga4ConnectionId)).resolves.toEqual({ state: "started", jobId: "51", status: "pending" });
+  });
+
+  it("treats an already active sync as replay-safe", async () => {
+    server.use(
+      http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
+      http.post("http://airbyte.test/v1/jobs", () => new HttpResponse(null, { status: 409 })),
+    );
+
+    await expect(triggerAirbyteSync(configuration, ga4ConnectionId)).resolves.toMatchObject({ state: "already_running" });
   });
 
   it("refuses to create a connection when the approved GA4 stream contract is unavailable", async () => {

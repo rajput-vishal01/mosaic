@@ -28,7 +28,7 @@ const connectionHealthTone = {
 } as const;
 
 const ga4ResultMessages: Record<string, { tone: string; message: string }> = {
-  connected: { tone: "border-emerald-200 bg-emerald-50 text-emerald-800", message: "GA4 was authorized and connected to the warehouse." },
+  connected: { tone: "border-emerald-200 bg-emerald-50 text-emerald-800", message: "GA4 was connected and its initial synchronization was requested." },
   session_expired: { tone: "border-amber-200 bg-amber-50 text-amber-800", message: "The Mosaic session expired during authorization. Start the GA4 connection again." },
   invalid_callback: { tone: "border-rose-200 bg-rose-50 text-rose-800", message: "The GA4 callback was incomplete. Start the connection again." },
   invalid_state: { tone: "border-rose-200 bg-rose-50 text-rose-800", message: "The GA4 authorization expired or was already used. Start the connection again." },
@@ -37,6 +37,8 @@ const ga4ResultMessages: Record<string, { tone: string; message: string }> = {
   registration_error: { tone: "border-rose-200 bg-rose-50 text-rose-800", message: "Mosaic could not register the GA4 source. Use a different connection name and try again." },
   connection_error: { tone: "border-amber-200 bg-amber-50 text-amber-800", message: "The GA4 source exists, but its warehouse connection needs recovery." },
   warehouse_error: { tone: "border-amber-200 bg-amber-50 text-amber-800", message: "GA4 is connected, but its account scopes were not published. Retry from Warehouse account scopes before assigning clients." },
+  sync_start_error: { tone: "border-amber-200 bg-amber-50 text-amber-800", message: "GA4 is connected and scheduled, but Airbyte could not start the initial synchronization immediately." },
+  sync_tracking_error: { tone: "border-amber-200 bg-amber-50 text-amber-800", message: "Airbyte accepted the initial synchronization, but Mosaic could not record it yet. The background reconciler can recover its status." },
 };
 
 const syncRunTone = {
