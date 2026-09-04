@@ -30,6 +30,10 @@ const ga4ReportingStreamName = "mga4";
 const ga4ReportingDimensions = ["date", "sessionDefaultChannelGroup", "country", "deviceCategory"];
 const ga4ReportingMetrics = ["sessions", "totalUsers", "newUsers", "engagedSessions", "eventCount", "keyEvents", "totalRevenue"];
 
+export function getAirbyteSourcePrefix(sourceId: string) {
+  return `m_${sourceId.replaceAll("-", "").toLowerCase().slice(0, 28)}_`;
+}
+
 export type AirbyteProbeResult =
   | { state: "healthy"; checkedAt: string; workspaceName: string }
   | {
@@ -291,7 +295,7 @@ export async function createAirbyteConnection(configuration: AirbyteConfiguratio
         configurations: { streams: requiredStreamNames.map((name) => ({ name, syncMode: "incremental_append" as const })) },
         namespaceDefinition: "custom_format",
         namespaceFormat: "mosaic_airbyte",
-        prefix: `m_${input.sourceId.replaceAll("-", "").toLowerCase().slice(0, 28)}_`,
+        prefix: getAirbyteSourcePrefix(input.sourceId),
         schedule: { scheduleType: "cron", cronExpression: configuration.syncFrequencyHours === 24 ? "0 0 0 * * ?" : `0 0 */${configuration.syncFrequencyHours} * * ?` },
         nonBreakingSchemaUpdatesBehavior: "disable_connection",
         status: "active",

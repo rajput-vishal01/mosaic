@@ -1,24 +1,16 @@
 import postgres from "postgres";
-import { z } from "zod";
 
 import { Ga4TransformError, transformGa4DirectLoad } from "./ga4-transform";
-
-const configurationSchema = z.object({
-  databaseUrl: z.string().url().refine((value) => value.startsWith("postgres://") || value.startsWith("postgresql://")),
-  connectTimeoutSeconds: z.coerce.number().int().min(1).max(30).default(5),
-});
+import { getWarehouseTransformConfiguration } from "./transform-config";
 
 async function main() {
-  const configuration = configurationSchema.safeParse({
-    databaseUrl: process.env.WAREHOUSE_TRANSFORM_DATABASE_URL,
-    connectTimeoutSeconds: process.env.WAREHOUSE_TRANSFORM_CONNECT_TIMEOUT_SECONDS,
-  });
-  if (!configuration.success) throw new Ga4TransformError("The warehouse transform runner is not configured correctly.");
+  const configuration = getWarehouseTransformConfiguration();
+  if (configuration.state !== "ready") throw new Ga4TransformError("The warehouse transform runner is not configured correctly.");
 
-  const sql = postgres(configuration.data.databaseUrl, {
+  const sql = postgres(configuration.configuration.databaseUrl, {
     max: 1,
     prepare: false,
-    connect_timeout: configuration.data.connectTimeoutSeconds,
+    connect_timeout: configuration.configuration.connectTimeoutSeconds,
   });
 
   try {

@@ -2,7 +2,7 @@ import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { createAirbyteConnection, createGa4Source, deleteAirbyteSourceAndConnection, getLatestAirbyteSync, getRecentAirbyteSyncs, initiateGa4OAuth, probeAirbyte } from "./client";
+import { createAirbyteConnection, createGa4Source, deleteAirbyteSourceAndConnection, getAirbyteSourcePrefix, getLatestAirbyteSync, getRecentAirbyteSyncs, initiateGa4OAuth, probeAirbyte } from "./client";
 import type { AirbyteConfiguration } from "./config";
 
 const configuration: AirbyteConfiguration = {
@@ -22,6 +22,12 @@ const ga4ConnectionId = "44444444-4444-4444-8444-444444444444";
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
+
+describe("Airbyte destination naming", () => {
+  it("normalizes UUID case into a fixed-length source prefix", () => {
+    expect(getAirbyteSourcePrefix("ABCDEFAB-CDEF-4ABC-8DEF-ABCDEFABCDEF")).toBe("m_abcdefabcdef4abc8defabcdefab_");
+  });
+});
 
 describe("Airbyte health probe", () => {
   it("verifies health, fresh credentials, and workspace access", async () => {

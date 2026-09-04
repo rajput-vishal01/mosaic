@@ -18,6 +18,7 @@
     "warehouse:transform:ga4": "tsx warehouse/run-ga4-transform.ts",
     "warehouse:verify:ga4": "tsx warehouse/verify-ga4-transform.ts",
     "warehouse:verify": "tsx warehouse/verify.ts",
+    "operations:reconcile": "tsx --conditions=react-server operations/reconcile.ts",
     "auth:create-superadmin": "auth create-admin --config lib/auth/config.ts --role superadmin"
   },
   "dependencies": {

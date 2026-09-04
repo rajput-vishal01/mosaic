@@ -35,7 +35,7 @@ export type Ga4TableResult = {
   rowsLoaded: number;
 };
 
-async function discoverGa4Tables(sql: WarehouseSql) {
+async function discoverGa4Tables(sql: WarehouseSql, sourcePrefixes?: ReadonlySet<string>) {
   const rows = await sql<{ tableName: string }[]>`
     SELECT table_name AS "tableName"
     FROM information_schema.tables
@@ -44,7 +44,10 @@ async function discoverGa4Tables(sql: WarehouseSql) {
     ORDER BY table_name
   `;
 
-  return rows.map((row) => row.tableName).filter((tableName) => GA4_TABLE_PATTERN.test(tableName));
+  return rows
+    .map((row) => row.tableName)
+    .filter((tableName) => GA4_TABLE_PATTERN.test(tableName))
+    .filter((tableName) => !sourcePrefixes || [...sourcePrefixes].some((prefix) => tableName.startsWith(prefix)));
 }
 
 async function assertTableContract(sql: postgres.TransactionSql, tableName: string) {
@@ -230,8 +233,15 @@ async function transformTable(sql: WarehouseSql, tableName: string): Promise<Ga4
   });
 }
 
-export async function transformGa4DirectLoad(sql: WarehouseSql): Promise<Ga4TableResult[]> {
-  const tables = await discoverGa4Tables(sql);
+export async function transformGa4DirectLoad(
+  sql: WarehouseSql,
+  options: { sourcePrefixes?: readonly string[] } = {},
+): Promise<Ga4TableResult[]> {
+  const sourcePrefixes = options.sourcePrefixes ? new Set(options.sourcePrefixes) : undefined;
+  if (sourcePrefixes && [...sourcePrefixes].some((prefix) => !/^m_[0-9a-f]{28}_$/.test(prefix))) {
+    throw new Ga4TransformError("Refused an invalid Airbyte source prefix.");
+  }
+  const tables = await discoverGa4Tables(sql, sourcePrefixes);
   const results: Ga4TableResult[] = [];
   for (const tableName of tables) results.push(await transformTable(sql, tableName));
   return results;

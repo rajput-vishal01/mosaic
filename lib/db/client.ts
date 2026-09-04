@@ -26,4 +26,8 @@ if (process.env.NODE_ENV !== "production") {
 
 export const db = drizzle(sql, { schema });
 
+export async function closeDatabaseConnection() {
+  await sql.end();
+}
+
 export type Database = typeof db;

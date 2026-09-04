@@ -15,13 +15,14 @@ function sanitizedFailureSummary(status: typeof syncRun.$inferInsert.status) {
 
 export async function refreshLinkedAirbyteSnapshots(configuration: AirbyteConfiguration) {
   const authorizations = await db
-    .select({ id: providerAuthorization.id, connectionId: providerAuthorization.airbyteConnectionId })
+    .select({ id: providerAuthorization.id, sourceId: providerAuthorization.airbyteSourceId, connectionId: providerAuthorization.airbyteConnectionId })
     .from(providerAuthorization)
     .where(isNotNull(providerAuthorization.airbyteConnectionId));
 
   let updated = 0;
   let unavailable = 0;
   let runsObserved = 0;
+  const transformEligibleSourceIds: string[] = [];
 
   for (const authorization of authorizations) {
     if (!authorization.connectionId) continue;
@@ -33,6 +34,7 @@ export async function refreshLinkedAirbyteSnapshots(configuration: AirbyteConfig
     }
     const latest = recent.runs[0];
     if (!latest) continue;
+    if (latest.status === "succeeded" && authorization.sourceId) transformEligibleSourceIds.push(authorization.sourceId);
 
     await db.transaction(async (transaction) => {
       for (const run of recent.runs) {
@@ -90,5 +92,5 @@ export async function refreshLinkedAirbyteSnapshots(configuration: AirbyteConfig
     updated += 1;
   }
 
-  return { linked: authorizations.length, updated, unavailable, runsObserved };
+  return { linked: authorizations.length, updated, unavailable, runsObserved, transformEligibleSourceIds };
 }

@@ -53,7 +53,13 @@ export async function refreshSynchronizationStatus(): Promise<SyncRefreshState> 
   const configuration = getAirbyteConfiguration();
   if (configuration.state !== "ready") return { status: "error", message: "Complete the Airbyte configuration before refreshing synchronization status." };
 
-  const result = await refreshLinkedAirbyteSnapshots(configuration.configuration);
+  const reconciliation = await refreshLinkedAirbyteSnapshots(configuration.configuration);
+  const result = {
+    linked: reconciliation.linked,
+    updated: reconciliation.updated,
+    unavailable: reconciliation.unavailable,
+    runsObserved: reconciliation.runsObserved,
+  };
   await recordAuditEvent({
     actorUserId: session.user.id,
     resourceType: "connection",

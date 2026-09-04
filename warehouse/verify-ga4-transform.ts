@@ -4,11 +4,13 @@ import postgres from "postgres";
 
 import { Ga4TransformError, transformGa4DirectLoad } from "./ga4-transform";
 
-const TEST_TABLE = "m_aaaaaaaaaaaaaaaaaaaaaaaaaaaa_mga4Property12345";
+const TEST_PREFIX = "m_aaaaaaaaaaaaaaaaaaaaaaaaaaaa_";
+const TEST_TABLE = `${TEST_PREFIX}mga4Property12345`;
+const IGNORED_TABLE = "m_bbbbbbbbbbbbbbbbbbbbbbbbbbbb_mga4Property67890";
 
 async function expectTransformFailure(sql: ReturnType<typeof postgres>, expectedMessage: string) {
   try {
-    await transformGa4DirectLoad(sql);
+    await transformGa4DirectLoad(sql, { sourcePrefixes: [TEST_PREFIX] });
   } catch (error) {
     if (error instanceof Ga4TransformError && error.message.includes(expectedMessage)) return;
     throw new Error("The transform failed with an unexpected public error.");
@@ -49,6 +51,7 @@ async function main() {
         "keyEvents" text,
         "totalRevenue" text
       )`;
+      await transaction`CREATE TABLE ${transaction(`mosaic_airbyte.${IGNORED_TABLE}`)} (unexpected text)`;
       await transaction`INSERT INTO ${transaction(`mosaic_airbyte.${TEST_TABLE}`)} VALUES (
         '00000000-0000-4000-8000-000000000001', ${firstExtractedAt}, '{"changes":[]}', 1,
         ${mappedProperty}, '2026-09-03', 'Organic Search', 'India', 'desktop',
@@ -71,7 +74,7 @@ async function main() {
     }
 
     await runner`SET ROLE mosaic_transform_runner`;
-    const initial = await transformGa4DirectLoad(runner);
+    const initial = await transformGa4DirectLoad(runner, { sourcePrefixes: [TEST_PREFIX] });
     if (initial.length !== 1 || initial[0]?.rowsLoaded !== 1) throw new Error("The initial GA4 batch was not loaded.");
 
     const [firstMetric] = await admin<{ sessions: string; totalRevenue: string }[]>`
@@ -91,7 +94,7 @@ async function main() {
         '14', '11', '4', '9', '30', '3', '160'
       )`;
     });
-    const replacement = await transformGa4DirectLoad(runner);
+    const replacement = await transformGa4DirectLoad(runner, { sourcePrefixes: [TEST_PREFIX] });
     if (replacement[0]?.rowsLoaded !== 1) throw new Error("The replacement GA4 observation was not loaded.");
 
     const [replacedMetric] = await admin<{ sessions: string }[]>`
@@ -147,6 +150,7 @@ async function main() {
     await admin`DELETE FROM mosaic_transform.ga4_daily_metrics WHERE account_scope_id = ${accountScopeId}`;
     await admin`DELETE FROM mosaic_control.account_scope_map WHERE account_scope_id = ${accountScopeId}`;
     await admin`DROP TABLE IF EXISTS ${sourceTable}`;
+    await admin`DROP TABLE IF EXISTS ${admin(`mosaic_airbyte.${IGNORED_TABLE}`)}`;
     await Promise.all([runner.end(), admin.end()]);
   }
 }
