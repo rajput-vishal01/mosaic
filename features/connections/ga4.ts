@@ -129,7 +129,7 @@ export async function recordTriggeredGa4Sync(input: {
   });
 }
 
-export async function getGa4ConnectionForRevocation(authorizationId: string) {
+export async function getActiveGa4Connection(authorizationId: string) {
   const [authorization] = await db
     .select({
       id: providerAuthorization.id,

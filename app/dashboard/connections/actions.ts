@@ -6,10 +6,10 @@ import { z } from "zod";
 
 import { recordAuditEvent } from "@/features/audit/commands";
 import { refreshLinkedAirbyteSnapshots } from "@/features/connections/commands";
-import { createGa4OauthState, discardGa4OauthState, getGa4ConnectionForRevocation, recordGa4RevocationResult } from "@/features/connections/ga4";
+import { createGa4OauthState, discardGa4OauthState, getActiveGa4Connection, recordGa4RevocationResult, recordTriggeredGa4Sync } from "@/features/connections/ga4";
 import { ga4SetupSchema } from "@/features/connections/ga4-schema";
 import { publishCanonicalWarehouseScopes } from "@/features/connections/warehouse";
-import { deleteAirbyteSourceAndConnection, initiateGa4OAuth, probeAirbyte, type AirbyteProbeResult } from "@/lib/airbyte/client";
+import { deleteAirbyteSourceAndConnection, initiateGa4OAuth, probeAirbyte, triggerAirbyteSync, type AirbyteProbeResult } from "@/lib/airbyte/client";
 import { getAirbyteConfiguration, isGa4OauthConfigured } from "@/lib/airbyte/config";
 import { requireSuperadmin } from "@/lib/auth/session";
 import { getWarehouseScopeConfiguration } from "@/lib/warehouse/config";
@@ -107,11 +107,48 @@ export async function startGa4Authorization(_state: Ga4SetupState, formData: For
 
 export type RevokeConnectionState = { status: "idle" } | { status: "error" | "complete"; message: string };
 
+export type TriggerSyncState = { status: "idle" } | { status: "error" | "complete"; message: string };
+
+export async function triggerGa4Synchronization(_state: TriggerSyncState, formData: FormData): Promise<TriggerSyncState> {
+  const session = await requireSuperadmin();
+  const parsed = z.uuid().safeParse(formData.get("authorizationId"));
+  if (!parsed.success) return { status: "error", message: "The selected connection is invalid." };
+
+  const authorization = await getActiveGa4Connection(parsed.data);
+  if (!authorization) return { status: "error", message: "The GA4 connection is no longer active." };
+  const configuration = getAirbyteConfiguration();
+  if (configuration.state !== "ready") return { status: "error", message: "Complete the Airbyte configuration before starting a synchronization." };
+
+  const result = await triggerAirbyteSync(configuration.configuration, authorization.connectionId);
+  if (result.state === "started") {
+    try {
+      await recordTriggeredGa4Sync({ authorizationId: authorization.id, jobId: result.jobId, status: result.status });
+    } catch {
+      return { status: "error", message: "Airbyte accepted the synchronization, but Mosaic could not record it yet." };
+    }
+  }
+
+  const accepted = result.state === "started" || result.state === "already_running";
+  await recordAuditEvent({
+    actorUserId: session.user.id,
+    resourceType: "connection",
+    resourceId: authorization.id,
+    action: "ga4.sync_trigger",
+    result: accepted ? "allowed" : "denied",
+    details: { outcome: result.state },
+  });
+  revalidatePath("/dashboard/connections");
+
+  if (result.state === "started") return { status: "complete", message: `${authorization.label} is syncing now.` };
+  if (result.state === "already_running") return { status: "complete", message: `${authorization.label} already has an active sync.` };
+  return { status: "error", message: result.message };
+}
+
 export async function revokeGa4Connection(_state: RevokeConnectionState, formData: FormData): Promise<RevokeConnectionState> {
   const session = await requireSuperadmin();
   const parsed = z.uuid().safeParse(formData.get("authorizationId"));
   if (!parsed.success) return { status: "error", message: "The selected connection is invalid." };
-  const authorization = await getGa4ConnectionForRevocation(parsed.data);
+  const authorization = await getActiveGa4Connection(parsed.data);
   if (!authorization) return { status: "error", message: "The GA4 connection is no longer active." };
   const configuration = getAirbyteConfiguration();
   if (configuration.state !== "ready") return { status: "error", message: "Airbyte must be configured before disconnecting this source." };
