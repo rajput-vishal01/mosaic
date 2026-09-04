@@ -26,7 +26,7 @@ const streamPropertiesSchema = z.array(z.object({
   syncModes: z.array(z.enum(["full_refresh_overwrite", "full_refresh_overwrite_deduped", "full_refresh_append", "full_refresh_update", "full_refresh_soft_delete", "incremental_append", "incremental_deduped_history", "incremental_update", "incremental_soft_delete"])).optional(),
 }));
 
-const ga4ReportingStreamName = "mosaic_ga4_daily";
+const ga4ReportingStreamName = "mga4";
 const ga4ReportingDimensions = ["date", "sessionDefaultChannelGroup", "country", "deviceCategory"];
 const ga4ReportingMetrics = ["sessions", "totalUsers", "newUsers", "engagedSessions", "eventCount", "keyEvents", "totalRevenue"];
 
@@ -290,7 +290,8 @@ export async function createAirbyteConnection(configuration: AirbyteConfiguratio
         destinationId: configuration.destinationId,
         configurations: { streams: requiredStreamNames.map((name) => ({ name, syncMode: "incremental_append" as const })) },
         namespaceDefinition: "custom_format",
-        namespaceFormat: `mosaic_${input.sourceId.replaceAll("-", "")}`,
+        namespaceFormat: "mosaic_airbyte",
+        prefix: `m_${input.sourceId.replaceAll("-", "").toLowerCase().slice(0, 28)}_`,
         schedule: { scheduleType: "cron", cronExpression: configuration.syncFrequencyHours === 24 ? "0 0 0 * * ?" : `0 0 */${configuration.syncFrequencyHours} * * ?` },
         nonBreakingSchemaUpdatesBehavior: "disable_connection",
         status: "active",

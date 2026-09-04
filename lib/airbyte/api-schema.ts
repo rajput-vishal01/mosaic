@@ -182,6 +182,7 @@ export interface AirbyteApiPaths {
             };
             namespaceDefinition: "custom_format";
             namespaceFormat: string;
+            prefix: string;
             schedule: { scheduleType: "cron"; cronExpression: string };
             nonBreakingSchemaUpdatesBehavior: "disable_connection";
             status: "active";

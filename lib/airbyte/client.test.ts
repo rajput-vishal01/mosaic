@@ -138,7 +138,7 @@ describe("Airbyte GA4 provisioning", () => {
     server.use(
       http.post("http://airbyte.test/v1/applications/token", () => HttpResponse.json({ access_token: "token" })),
       http.post("http://airbyte.test/v1/sources", async ({ request }) => {
-        expect(await request.json()).toEqual({ name: "Main GA4", workspaceId: configuration.workspaceId, secretId: "opaque-secret-id", configuration: { sourceType: "google-analytics-data-api", property_ids: ["123456789", "987654321"], custom_reports_array: [{ name: "mosaic_ga4_daily", dimensions: ["date", "sessionDefaultChannelGroup", "country", "deviceCategory"], metrics: ["sessions", "totalUsers", "newUsers", "engagedSessions", "eventCount", "keyEvents", "totalRevenue"] }], window_in_days: 1, lookback_window: 2, date_ranges_start_date: "2025-01-01" } });
+        expect(await request.json()).toEqual({ name: "Main GA4", workspaceId: configuration.workspaceId, secretId: "opaque-secret-id", configuration: { sourceType: "google-analytics-data-api", property_ids: ["123456789", "987654321"], custom_reports_array: [{ name: "mga4", dimensions: ["date", "sessionDefaultChannelGroup", "country", "deviceCategory"], metrics: ["sessions", "totalUsers", "newUsers", "engagedSessions", "eventCount", "keyEvents", "totalRevenue"] }], window_in_days: 1, lookback_window: 2, date_ranges_start_date: "2025-01-01" } });
         return HttpResponse.json({ sourceId: ga4SourceId });
       }),
       http.get("http://airbyte.test/v1/streams", ({ request }) => {
@@ -147,12 +147,12 @@ describe("Airbyte GA4 provisioning", () => {
         expect(query.get("destinationId")).toBe(configuration.destinationId);
         expect(query.get("ignoreCache")).toBe("true");
         return HttpResponse.json([
-          { streamName: "mosaic_ga4_daily", syncModes: ["incremental_append"] },
-          { streamName: "mosaic_ga4_dailyProperty987654321", syncModes: ["incremental_append"] },
+          { streamName: "mga4", syncModes: ["incremental_append"] },
+          { streamName: "mga4Property987654321", syncModes: ["incremental_append"] },
         ]);
       }),
       http.post("http://airbyte.test/v1/connections", async ({ request }) => {
-        expect(await request.json()).toEqual({ name: "Main GA4", sourceId: ga4SourceId, destinationId: configuration.destinationId, configurations: { streams: [{ name: "mosaic_ga4_daily", syncMode: "incremental_append" }, { name: "mosaic_ga4_dailyProperty987654321", syncMode: "incremental_append" }] }, namespaceDefinition: "custom_format", namespaceFormat: "mosaic_33333333333343338333333333333333", schedule: { scheduleType: "cron", cronExpression: "0 0 */6 * * ?" }, nonBreakingSchemaUpdatesBehavior: "disable_connection", status: "active" });
+        expect(await request.json()).toEqual({ name: "Main GA4", sourceId: ga4SourceId, destinationId: configuration.destinationId, configurations: { streams: [{ name: "mga4", syncMode: "incremental_append" }, { name: "mga4Property987654321", syncMode: "incremental_append" }] }, namespaceDefinition: "custom_format", namespaceFormat: "mosaic_airbyte", prefix: "m_3333333333334333833333333333_", schedule: { scheduleType: "cron", cronExpression: "0 0 */6 * * ?" }, nonBreakingSchemaUpdatesBehavior: "disable_connection", status: "active" });
         return HttpResponse.json({ connectionId: ga4ConnectionId });
       }),
     );

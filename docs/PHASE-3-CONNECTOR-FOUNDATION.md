@@ -26,7 +26,8 @@ Phase 3 starts with a deliberately narrow control-plane boundary. Mosaic can now
 - The Superset database role is a passwordless group role in Git; deployment creates its login through a secret manager. Automated verification proves control and transform objects are invisible, inactive scopes are filtered, active scopes are readable, and writes are denied.
 - Mosaic now publishes non-fixture provider-account mappings through one validated bulk warehouse function. The runtime role can execute that function but cannot read or write warehouse tables directly; UUID reassignment is rejected, publication is transactional, successful GA4 setup activates scopes, and revocation deactivates them. A superadmin retry action recovers cross-database publication failures.
 - Status refresh now reads the ten most recent Airbyte jobs per connection and retains up to 100 observed runs instead of overwriting all operational evidence with one snapshot. The operator view shows start time, duration, row count, status, and a deliberately sanitized failure summary; raw Airbyte errors and credentials remain in the private service.
-- GA4 source creation now declares one production report contract, `mosaic_ga4_daily`, with the exact dimensions and metrics consumed by the warehouse. Airbyte materializes that report as one stream per configured property; before creating a pipeline, Mosaic forces a fresh discovery and requires every expected property stream to support incremental append. Each authorization writes to a deterministic source-ID namespace, preventing two clients' identically named streams from colliding in PostgreSQL.
+- GA4 source creation now declares one production report contract, `mga4`, with the exact dimensions and metrics consumed by the warehouse. Airbyte materializes that report as one stream per configured property; before creating a pipeline, Mosaic forces a fresh discovery and requires every expected property stream to support incremental append. Each authorization writes into `mosaic_airbyte` with a deterministic 112-bit source-ID prefix, preventing identically named client streams from colliding while staying under PostgreSQL's identifier limit.
+- A standalone TypeScript worker now normalizes Airbyte's typed Direct Load tables into the approved GA4 fact grain. Per-table cursor checkpoints advance transactionally with metric upserts; newer daily observations replace lookback duplicates, while unmapped properties, conversion warnings, and schema drift fail closed without advancing the cursor. Dedicated Airbyte-writer and transform-runner roles enforce the raw-to-transform boundary, and integration verification exercises both successful replacement and atomic rejection.
 
 The checked-in API surface is intentionally narrow. Once a real self-managed Airbyte version is deployed, generate the complete client from that instance's OpenAPI schema and review the generated diff before adding OAuth mutations.
 
@@ -50,6 +51,8 @@ The checked-in API surface is intentionally narrow. Once a real self-managed Air
 | `SUPERSET_EMBED_READY` | Acknowledgement that embedded mode and explicit allowed domains are hardened |
 | `WAREHOUSE_SCOPE_DATABASE_URL` | Credential-bearing runtime URL for a login that belongs only to `mosaic_scope_writer` |
 | `WAREHOUSE_SCOPE_CONNECT_TIMEOUT_SECONDS` | Scope-publication connection timeout; defaults to 5 seconds |
+| `WAREHOUSE_TRANSFORM_DATABASE_URL` | Credential-bearing URL for the dedicated `mosaic_transform_runner` login |
+| `WAREHOUSE_TRANSFORM_CONNECT_TIMEOUT_SECONDS` | Transform-worker connection timeout; defaults to 5 seconds |
 
 All variables are server-only. An empty Airbyte configuration is a supported local fixture-development state. A partial or malformed configuration is surfaced as needing attention.
 
@@ -70,6 +73,7 @@ Provider authorization belongs to the Mosaic operator. Airbyte stores and refres
 1. Provision private Airbyte and the warehouse destination on a sufficiently sized host.
 2. Generate and pin the API contract from the deployed Airbyte version.
 3. Install and test the GA4 workspace OAuth credential override, then exercise the implemented callback end to end.
-4. Verify source/connection recovery behavior against real Airbyte failures.
-5. Design and implement automatic accessible-property discovery; operator-supplied IDs remain explicit until then.
-6. Schedule server-side job polling and verify stale-data behavior against a live failed sync.
+4. Exercise the checked-in GA4 transform against real Postgres Direct Load output and confirm connector column types match the pinned contract.
+5. Verify source/connection recovery behavior against real Airbyte failures.
+6. Design and implement automatic accessible-property discovery; operator-supplied IDs remain explicit until then.
+7. Schedule server-side job polling and the standalone transform worker, then verify stale-data behavior against a live failed sync.

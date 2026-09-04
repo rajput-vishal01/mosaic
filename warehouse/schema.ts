@@ -2,6 +2,7 @@ import { bigint, boolean, date, index, numeric, pgSchema, primaryKey, text, time
 
 export const warehouseControl = pgSchema("mosaic_control");
 export const warehouseTransform = pgSchema("mosaic_transform");
+export const warehouseAirbyte = pgSchema("mosaic_airbyte");
 
 export const accountScopeMap = warehouseControl.table(
   "account_scope_map",
@@ -39,3 +40,12 @@ export const ga4DailyMetrics = warehouseTransform.table(
     index("ga4_daily_metrics_date_scope_idx").on(table.metricDate, table.accountScopeId),
   ],
 );
+
+export const ga4LoadCheckpoint = warehouseTransform.table("ga4_load_checkpoint", {
+  rawTable: text("raw_table").primaryKey(),
+  lastExtractedAt: timestamp("last_extracted_at", { withTimezone: true }).notNull(),
+  lastRawId: text("last_raw_id").notNull(),
+  lastGenerationId: bigint("last_generation_id", { mode: "number" }),
+  rowsLoaded: bigint("rows_loaded", { mode: "number" }).default(0).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});

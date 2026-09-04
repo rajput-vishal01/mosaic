@@ -7,11 +7,13 @@ The warehouse is separate from Mosaic's application database and from Airbyte's 
 1. Start the warehouse with `docker compose -f compose.dev.yml up -d warehouse`.
 2. Set `WAREHOUSE_ADMIN_DATABASE_URL` to the local value in `.env.example`.
 3. Run `npm run warehouse:migrate`.
-4. Apply `warehouse/admin/create-superset-reader.sql` and `warehouse/admin/create-scope-writer.sql` as the warehouse owner.
+4. Apply `warehouse/admin/create-superset-reader.sql`, `warehouse/admin/create-scope-writer.sql`, and `warehouse/admin/create-transform-roles.sql` as the warehouse owner.
 5. Run `warehouse/admin/verify-superset-reader.sql` and confirm every result matches its `_expected_true` or `_expected_false` suffix.
 6. Run `npm run warehouse:verify` to exercise inactive/active scope filtering and an actual denied write through the Superset role.
 
-Both group roles have no login or password. Production infrastructure creates dedicated logins from a secret manager and grants them `mosaic_superset_reader` or `mosaic_scope_writer`; passwords never belong in Git or migration history. Set the Superset login's `default_transaction_read_only` to `on` and a deployment-appropriate `statement_timeout` before connecting Superset. Mosaic receives only the scope-writer login through `WAREHOUSE_SCOPE_DATABASE_URL`, never the warehouse-owner URL.
+The checked-in roles have no login or password. Production infrastructure supplies dedicated credentials from a secret manager; passwords never belong in Git or migration history. Set the Superset login's `default_transaction_read_only` to `on` and a deployment-appropriate `statement_timeout` before connecting Superset. Mosaic receives only the scope-writer login through `WAREHOUSE_SCOPE_DATABASE_URL`, never the warehouse-owner URL.
+
+Airbyte must connect as `mosaic_airbyte_writer` after deployment activates that role as a login. This makes the role the owner of created Direct Load tables and causes the checked-in default SELECT grant for `mosaic_transform_runner` to apply. The transform worker similarly uses an activated `mosaic_transform_runner` login through `WAREHOUSE_TRANSFORM_DATABASE_URL`. If infrastructure uses differently named login roles instead, it must reproduce the owner-specific default privileges explicitly; membership alone does not transfer table ownership.
 
 ## Data contract
 
@@ -21,6 +23,10 @@ Mosaic publishes mappings in batches through `mosaic_control.publish_account_sco
 
 The initial GA4 grain is one row per account scope, date, session default channel group, country, and device category. The metric names follow the Google Analytics Data API names selected for the first dashboard. Changes to this contract require a new forward migration; deployed migrations are never edited.
 
-Airbyte discovers and selects only the property-specific streams generated from the `mosaic_ga4_daily` custom report. Each source writes them under a deterministic `mosaic_<source-id-without-dashes>` namespace so authorization boundaries cannot collide in raw destination tables. The transformation that promotes those raw tables into `mosaic_transform.ga4_daily_metrics` must resolve each record's `property_id` through Mosaic's canonical account-scope mapping; it must never infer client authorization from a browser filter.
+Airbyte discovers and selects only the property-specific streams generated from the short `mga4` custom report name. All sources write typed Direct Load tables into the private `mosaic_airbyte` schema. Each table gets a deterministic `m_<first-28-source-id-hex>_` prefix, which preserves room under PostgreSQL's 63-character identifier limit even when Airbyte appends `Property<property-id>`.
+
+Run `npm run warehouse:transform:ga4` from a scheduler beside the persistent data services after successful Airbyte syncs. It is deliberately not a Vercel request or browser job. For each matching raw table, the runner locks and processes a bounded cursor window, rejects Airbyte conversion warnings and unmapped properties, keeps only the newest observation at the approved daily grain, then atomically upserts metrics and advances `mosaic_transform.ga4_load_checkpoint`. A two-day source lookback therefore replaces earlier daily values instead of summing repeated snapshots. Inactive mappings retain history in the transform table but remain absent from the reporting view.
+
+Only tables matching the approved source-prefix and GA4-stream pattern are read. A matching table with missing Direct Load columns fails closed. The runner emits table and row counts only; raw records, credentials, and upstream error details stay out of process output. Run `npm run warehouse:verify:ga4` with the owner URL to exercise normalization, latest-observation replacement, role isolation, and rollback of rejected batches.
 
 The checked-in down scripts are only for rebuilding disposable local databases. Production rollback is always another reviewed forward migration.

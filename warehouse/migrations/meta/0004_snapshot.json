@@ -1,0 +1,304 @@
+{
+  "id": "fce69f3f-58e0-4e01-8ce1-337af6891ddf",
+  "prevId": "e45155d8-f664-4566-9c11-c1a487b9946f",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "mosaic_control.account_scope_map": {
+      "name": "account_scope_map",
+      "schema": "mosaic_control",
+      "columns": {
+        "account_scope_id": {
+          "name": "account_scope_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_account_id": {
+          "name": "external_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "account_scope_map_provider_external_unique": {
+          "name": "account_scope_map_provider_external_unique",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "mosaic_transform.ga4_daily_metrics": {
+      "name": "ga4_daily_metrics",
+      "schema": "mosaic_transform",
+      "columns": {
+        "account_scope_id": {
+          "name": "account_scope_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metric_date": {
+          "name": "metric_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_default_channel_group": {
+          "name": "session_default_channel_group",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'(not set)'"
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'(not set)'"
+        },
+        "device_category": {
+          "name": "device_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'(not set)'"
+        },
+        "sessions": {
+          "name": "sessions",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "total_users": {
+          "name": "total_users",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "new_users": {
+          "name": "new_users",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "engaged_sessions": {
+          "name": "engaged_sessions",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "event_count": {
+          "name": "event_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "key_events": {
+          "name": "key_events",
+          "type": "numeric(20, 4)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "total_revenue": {
+          "name": "total_revenue",
+          "type": "numeric(20, 4)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "source_updated_at": {
+          "name": "source_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "loaded_at": {
+          "name": "loaded_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ga4_daily_metrics_date_scope_idx": {
+          "name": "ga4_daily_metrics_date_scope_idx",
+          "columns": [
+            {
+              "expression": "metric_date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "account_scope_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ga4_daily_metrics_account_scope_id_account_scope_map_account_scope_id_fk": {
+          "name": "ga4_daily_metrics_account_scope_id_account_scope_map_account_scope_id_fk",
+          "tableFrom": "ga4_daily_metrics",
+          "tableTo": "account_scope_map",
+          "schemaTo": "mosaic_control",
+          "columnsFrom": [
+            "account_scope_id"
+          ],
+          "columnsTo": [
+            "account_scope_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "ga4_daily_metrics_account_scope_id_metric_date_session_default_channel_group_country_device_category_pk": {
+          "name": "ga4_daily_metrics_account_scope_id_metric_date_session_default_channel_group_country_device_category_pk",
+          "columns": [
+            "account_scope_id",
+            "metric_date",
+            "session_default_channel_group",
+            "country",
+            "device_category"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "mosaic_transform.ga4_load_checkpoint": {
+      "name": "ga4_load_checkpoint",
+      "schema": "mosaic_transform",
+      "columns": {
+        "raw_table": {
+          "name": "raw_table",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "last_extracted_at": {
+          "name": "last_extracted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_raw_id": {
+          "name": "last_raw_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_generation_id": {
+          "name": "last_generation_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rows_loaded": {
+          "name": "rows_loaded",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {
+    "mosaic_airbyte": "mosaic_airbyte",
+    "mosaic_control": "mosaic_control",
+    "mosaic_transform": "mosaic_transform"
+  },
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
